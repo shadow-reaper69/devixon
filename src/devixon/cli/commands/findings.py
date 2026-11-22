@@ -95,7 +95,6 @@ def inspect_finding(finding_id: str = typer.Argument(..., help="Finding ID or pr
                 console.print(f"  {ev.sanitized_data}")
             console.print("")
 
-        # Verification Checklist
         checklist = get_verification_checklist(f.category)
         if checklist:
             console.print(f"[bold cyan]Manual Verification Checklist ({checklist.category}):[/bold cyan]")
@@ -107,12 +106,35 @@ def inspect_finding(finding_id: str = typer.Argument(..., help="Finding ID or pr
         session.close()
 
 
+def update_finding(
+    finding_id: str = typer.Argument(..., help="Finding ID or prefix"),
+    severity: Optional[str] = typer.Option(None, "--severity", "-s", help="New severity"),
+    status: Optional[str] = typer.Option(None, "--status", help="New verification status"),
+):
+    """Update finding severity or status."""
+    session = get_session()
+    try:
+        f = session.query(Finding).filter(Finding.id.like(f"{finding_id}%")).first()
+        if not f:
+            console.print(f"[red]Finding with ID '{finding_id}' not found.[/red]")
+            return
+
+        if severity:
+            f.severity = severity.upper()
+        if status:
+            f.verification_status = status.upper()
+        session.commit()
+        console.print(f"[green]Finding '{f.title}' successfully updated.[/green]")
+    finally:
+        session.close()
+
+
 def verify_finding(
     finding_id: str = typer.Argument(..., help="Finding ID or prefix"),
-    status: str = typer.Option("CONFIRMED", "--status", "-s", help="New status: CONFIRMED, FALSE_POSITIVE, FIXED"),
-    notes: Optional[str] = typer.Option(None, "--notes", help="Verification or false positive notes."),
+    status: str = typer.Option("CONFIRMED", "--status", "-s", help="New status: CONFIRMED, FIXED, ACCEPTED_RISK"),
+    notes: Optional[str] = typer.Option(None, "--notes", help="Verification notes"),
 ):
-    """Update verification status of a finding."""
+    """Confirm manual verification of a finding."""
     session = get_session()
     try:
         f = session.query(Finding).filter(Finding.id.like(f"{finding_id}%")).first()
@@ -125,5 +147,27 @@ def verify_finding(
             f.false_positive_reason = notes
         session.commit()
         console.print(f"[green]Finding '{f.title}' status updated to {status.upper()}[/green]")
+    finally:
+        session.close()
+
+
+def dismiss_finding(
+    finding_id: str = typer.Argument(..., help="Finding ID or prefix"),
+    reason: str = typer.Option("FALSE_POSITIVE", "--reason", "-r", help="Reason: FALSE_POSITIVE, ACCEPTED_RISK, NOT_REPRODUCIBLE"),
+    notes: Optional[str] = typer.Option(None, "--notes", help="Detailed dismissal notes"),
+):
+    """Dismiss a finding as false positive or accepted risk."""
+    session = get_session()
+    try:
+        f = session.query(Finding).filter(Finding.id.like(f"{finding_id}%")).first()
+        if not f:
+            console.print(f"[red]Finding with ID '{finding_id}' not found.[/red]")
+            return
+
+        f.verification_status = reason.upper()
+        if notes:
+            f.false_positive_reason = notes
+        session.commit()
+        console.print(f"[yellow]Finding '{f.title}' dismissed as {reason.upper()}[/yellow]")
     finally:
         session.close()

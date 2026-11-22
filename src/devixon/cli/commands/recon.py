@@ -7,10 +7,12 @@ from pathlib import Path
 from typing import Optional
 import typer
 from rich.console import Console
+from rich.table import Table
 from devixon.core.scope import ScopeProfile, normalize_target
 from devixon.core.config import DEFAULT_DATA_DIR
 from devixon.database.session import get_session, init_db
 from devixon.database.repository import AssessmentRepository
+from devixon.database.models import Assessment, ScanStage
 from devixon.recon.base import ScanContext
 from devixon.recon.pipeline import ReconPipeline
 from devixon.core.exceptions import ScopeViolationError
@@ -23,7 +25,6 @@ def _load_scope(name: str, target: str) -> ScopeProfile:
     p = SCOPES_DIR / f"{name}.json"
     if p.exists():
         return ScopeProfile.model_validate_json(p.read_text(encoding="utf-8"))
-    # Fallback to ephemeral authorized scope if testing
     return ScopeProfile(
         name=name,
         primary_domain=target,
@@ -100,3 +101,92 @@ def full(
 ):
     """Run full authorized reconnaissance and web security assessment pipeline."""
     run_recon(target=target, scope_name=scope_name, profile="FULL")
+
+
+def recon_status(
+    assessment_id: Optional[str] = typer.Option(None, "--id", help="Assessment ID (defaults to latest)"),
+):
+    """Check status and stage progress of an assessment."""
+    session = get_session()
+    try:
+        if assessment_id:
+            assessment = session.query(Assessment).filter(Assessment.id == assessment_id).first()
+        else:
+            assessment = session.query(Assessment).order_by(Assessment.created_at.desc()).first()
+
+        if not assessment:
+            console.print("[yellow]No assessments found.[/yellow]")
+            return
+
+        console.print(f"\n[bold cyan]ASSESSMENT STATUS: {assessment.target} ({assessment.id[:8]})[/bold cyan]")
+        console.print(f"Status: [bold]{assessment.status}[/bold] | Profile: {assessment.scan_profile}")
+        console.print(f"Started: {assessment.start_time.strftime('%Y-%m-%d %H:%M:%S UTC') if assessment.start_time else 'N/A'}")
+        console.print(f"Ended: {assessment.end_time.strftime('%Y-%m-%d %H:%M:%S UTC') if assessment.end_time else 'N/A'}\n")
+
+        stages = session.query(ScanStage).filter(ScanStage.assessment_id == assessment.id).all()
+        if stages:
+            table = Table(title="Pipeline Stage Execution Status", show_header=True, header_style="bold green")
+            table.add_column("Stage ID", style="dim")
+            table.add_column("Name", style="bold")
+            table.add_column("Status", style="cyan")
+            table.add_column("Duration", justify="right")
+
+            for s in stages:
+                table.add_row(
+                    s.stage_id,
+                    s.name,
+                    s.status,
+                    f"{s.duration:.2f}s" if s.duration else "-",
+                )
+            console.print(table)
+            console.print("")
+    finally:
+        session.close()
+
+
+def recon_resume(
+    assessment_id: str = typer.Argument(..., help="Assessment ID to resume"),
+):
+    """Resume an interrupted assessment."""
+    session = get_session()
+    try:
+        assessment = session.query(Assessment).filter(Assessment.id == assessment_id).first()
+        if not assessment:
+            console.print(f"[red]Assessment '{assessment_id}' not found.[/red]")
+            return
+        console.print(f"[green]Resuming assessment {assessment_id} for {assessment.target}...[/green]")
+        # Execute pipeline
+        scope = ScopeProfile.model_validate_json(assessment.scope_profile_json)
+        ctx = ScanContext(
+            assessment_id=assessment.id,
+            target=assessment.target,
+            scope_profile=scope,
+            scan_profile=assessment.scan_profile,
+        )
+        pipeline = ReconPipeline(ctx)
+        asyncio.run(pipeline.execute_all())
+        console.print("[bold green]Assessment resumed and completed successfully![/bold green]")
+    finally:
+        session.close()
+
+
+def recon_cancel(
+    assessment_id: Optional[str] = typer.Option(None, "--id", help="Assessment ID (defaults to latest)"),
+):
+    """Mark an active assessment as cancelled."""
+    session = get_session()
+    try:
+        if assessment_id:
+            assessment = session.query(Assessment).filter(Assessment.id == assessment_id).first()
+        else:
+            assessment = session.query(Assessment).order_by(Assessment.created_at.desc()).first()
+
+        if not assessment:
+            console.print("[yellow]No assessments found.[/yellow]")
+            return
+
+        assessment.status = "CANCELLED"
+        session.commit()
+        console.print(f"[yellow]Assessment {assessment.id[:8]} marked as CANCELLED.[/yellow]")
+    finally:
+        session.close()

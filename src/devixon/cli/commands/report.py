@@ -1,11 +1,13 @@
 """
-CLI Report Generation Commands.
+CLI Report Generation and Export Commands.
 """
 
 from pathlib import Path
 from typing import Optional
+import shutil
 import typer
 from rich.console import Console
+from rich.table import Table
 from devixon.core.config import load_config
 from devixon.database.session import get_session
 from devixon.database.models import Assessment, Finding, Asset
@@ -63,3 +65,43 @@ def generate_report(
 
     finally:
         session.close()
+
+
+def list_reports():
+    """List previously generated assessment reports."""
+    cfg = load_config()
+    reports_dir = Path(cfg.output.reports_dir)
+    if not reports_dir.exists() or not list(reports_dir.glob("*")):
+        console.print(f"[yellow]No reports found in {reports_dir}[/yellow]")
+        return
+
+    table = Table(title="Generated Assessment Reports", show_header=True, header_style="bold green")
+    table.add_column("Filename", style="bold cyan")
+    table.add_column("Format", style="yellow")
+    table.add_column("Size", justify="right")
+
+    for f in reports_dir.glob("*"):
+        if f.is_file():
+            table.add_row(f.name, f.suffix.upper().replace(".", ""), f"{f.stat().st_size} bytes")
+
+    console.print("\n")
+    console.print(table)
+    console.print(f"\nDirectory: {reports_dir}\n")
+
+
+def export_report(
+    source_filename: str = typer.Argument(..., help="Report filename to export"),
+    dest: Path = typer.Argument(..., help="Destination path"),
+):
+    """Export a report file to an external location."""
+    cfg = load_config()
+    reports_dir = Path(cfg.output.reports_dir)
+    src_path = reports_dir / source_filename
+
+    if not src_path.exists():
+        console.print(f"[red]Report '{source_filename}' not found in {reports_dir}[/red]")
+        raise typer.Exit(1)
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src_path, dest)
+    console.print(f"[green]Report exported to:[/green] {dest}")
