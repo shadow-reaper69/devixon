@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DEVIXON Security Assessment - {{ assessment.target }}</title>
+    <style>
+        :root {
+            --bg-primary: #121417;
+            --bg-secondary: #1a1e23;
+            --bg-card: #22272e;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent-teal: #2ea043;
+            --accent-cyan: #38bdf8;
+            --severity-critical: #f85149;
+            --severity-high: #fa7a18;
+            --severity-medium: #d29922;
+            --severity-low: #3fb950;
+            --severity-info: #58a6ff;
+            --border-color: #30363d;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem;
+        }
+        header {
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1.5rem;
+            margin-bottom: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        h1, h2, h3 { color: #fff; margin-top: 0; }
+        .brand { font-size: 1.8rem; font-weight: 700; letter-spacing: 1px; color: var(--accent-cyan); }
+        .meta-pill {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        .grid-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .stat-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.25rem;
+            text-align: center;
+        }
+        .stat-val { font-size: 2rem; font-weight: 700; margin-bottom: 0.25rem; }
+        .stat-label { font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; }
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .badge-critical { background: var(--severity-critical); color: #fff; }
+        .badge-high { background: var(--severity-high); color: #fff; }
+        .badge-medium { background: var(--severity-medium); color: #000; }
+        .badge-low { background: var(--severity-low); color: #000; }
+        .badge-info { background: var(--severity-info); color: #fff; }
+        .finding-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+        }
+        .finding-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+        code, pre {
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+            background: #161b22;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        pre {
+            padding: 1rem;
+            overflow-x: auto;
+            border: 1px solid var(--border-color);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+        th, td {
+            text-align: left;
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        th { color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <div class="brand">DEVIXON</div>
+                <div style="color: var(--text-secondary);">Security Assessment & Reconnaissance Report</div>
+            </div>
+            <div>
+                <span class="meta-pill">Target: {{ assessment.target }}</span>
+                <span class="meta-pill">Profile: {{ assessment.scan_profile }}</span>
+                <span class="meta-pill">Status: {{ assessment.status }}</span>
+            </div>
+        </header>
+
+        <div class="grid-stats">
+            <div class="stat-card">
+                <div class="stat-val" style="color: var(--accent-cyan);">{{ assets|length }}</div>
+                <div class="stat-label">Discovered Assets</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-val" style="color: var(--severity-critical);">{{ critical_count }}</div>
+                <div class="stat-label">Critical Findings</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-val" style="color: var(--severity-high);">{{ high_count }}</div>
+                <div class="stat-label">High Findings</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-val" style="color: var(--severity-medium);">{{ medium_count }}</div>
+                <div class="stat-label">Medium / Low</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Executive Summary</h2>
+            <p>Assessment executed against <strong>{{ assessment.target }}</strong> using DEVIXON. All operations conformed to authorized scope profile boundaries.</p>
+            <p>Assessment Timeline: Started {{ assessment.start_time.strftime('%Y-%m-%d %H:%M:%S UTC') if assessment.start_time else 'N/A' }} | Completed {{ assessment.end_time.strftime('%Y-%m-%d %H:%M:%S UTC') if assessment.end_time else 'N/A' }}</p>
+        </div>
+
+        <div class="card">
+            <h2>Security Findings ({{ findings|length }})</h2>
+            {% if findings %}
+                {% for finding in findings %}
+                <div class="finding-item">
+                    <div class="finding-header">
+                        <h3 style="margin: 0;">{{ finding.title }}</h3>
+                        <div>
+                            <span class="badge badge-{{ finding.severity.lower() }}">{{ finding.severity }}</span>
+                            <span class="meta-pill">{{ finding.verification_status }}</span>
+                        </div>
+                    </div>
+                    <p><strong>Category:</strong> {{ finding.category }} | <strong>CVSS:</strong> {{ finding.cvss_score or 'N/A' }}</p>
+                    <p>{{ finding.description }}</p>
+                    <h4>Impact</h4>
+                    <p>{{ finding.impact }}</p>
+                    <h4>Remediation</h4>
+                    <p>{{ finding.remediation }}</p>
+                    {% if finding.evidence %}
+                    <h4>Evidence</h4>
+                    {% for ev in finding.evidence %}
+                    <pre><code>{{ ev.sanitized_data }}</code></pre>
+                    {% endfor %}
+                    {% endif %}
+                </div>
+                {% endfor %}
+            {% else %}
+                <p style="color: var(--text-secondary);">No security vulnerabilities identified.</p>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <h2>Discovered Asset Inventory ({{ assets|length }})</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Hostname</th>
+                        <th>IP Address</th>
+                        <th>Type</th>
+                        <th>Scope Status</th>
+                        <th>Discovery Source</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for asset in assets %}
+                    <tr>
+                        <td><strong>{{ asset.hostname }}</strong></td>
+                        <td>{{ asset.ip_address or 'Unresolved' }}</td>
+                        <td>{{ asset.asset_type }}</td>
+                        <td>{{ asset.scope_status }}</td>
+                        <td>{{ asset.discovery_source }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>
