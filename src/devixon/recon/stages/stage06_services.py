@@ -24,6 +24,14 @@ class Stage06ServiceDiscovery(BaseStage):
         repo = AssessmentRepository(session)
 
         try:
+            # Determine ports to probe based on scope and target model
+            if ctx.scope_profile.allowed_ports:
+                ports_to_probe = ctx.scope_profile.allowed_ports
+            elif ctx.target_model.port is not None and ctx.target_model.target_type == "URL":
+                ports_to_probe = [ctx.target_model.port]
+            else:
+                ports_to_probe = SAFE_PORTS
+
             for domain in list(ctx.discovered_subdomains):
                 ctx.check_cancelled()
                 open_ports = []
@@ -36,7 +44,12 @@ class Stage06ServiceDiscovery(BaseStage):
                 if not asset:
                     continue
 
-                for port in SAFE_PORTS:
+                for port in ports_to_probe:
+                    # Enforce port scope policy before probing
+                    is_allowed, reason = ctx.scope_profile.is_in_scope(domain, port=port)
+                    if not is_allowed:
+                        continue
+
                     is_open = await self._probe_port(domain, port)
                     if is_open:
                         open_ports.append(port)

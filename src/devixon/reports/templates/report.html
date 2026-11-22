@@ -192,6 +192,8 @@
                 <tr><th>User Authorization Confirmed</th><td><span class="badge badge-resolved">{{ scope_info.get('authorized_by_user', False) }}</span></td></tr>
                 <tr><th>Allowed Subdomains & Wildcards</th><td>{{ scope_info.get('allowed_domains', []) | join(', ') or 'None specified' }}</td></tr>
                 <tr><th>Allowed IP / CIDR Ranges</th><td>{{ scope_info.get('allowed_ips', []) | join(', ') or 'None specified' }}</td></tr>
+                <tr><th>Allowed Ports</th><td>{{ scope_info.get('allowed_ports', []) | join(', ') or 'None specified' }}</td></tr>
+                <tr><th>Allowed Paths</th><td>{{ scope_info.get('allowed_paths', []) | join(', ') or 'None specified' }}</td></tr>
                 <tr><th>Explicit Excluded Targets</th><td>{{ scope_info.get('excluded_targets', []) | join(', ') or 'None' }}</td></tr>
                 <tr><th>Explicit Excluded Paths</th><td>{{ scope_info.get('excluded_paths', []) | join(', ') or 'None' }}</td></tr>
             </table>

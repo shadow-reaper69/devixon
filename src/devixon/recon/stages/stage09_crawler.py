@@ -26,15 +26,24 @@ class Stage09WebCrawler(BaseStage):
 
         katana_bin = shutil.which("katana")
         crawled_urls = set()
-        queue = [(u, 1) for u in list(ctx.live_hosts.keys())[:10]]
+        seed_urls = []
+        if ctx.target_model.target_type == "URL":
+            seed_urls.append(ctx.target_model.canonical_url)
+            ctx.discovered_urls.add(ctx.target_model.canonical_url)
+        for u in list(ctx.live_hosts.keys()):
+            if u not in seed_urls:
+                seed_urls.append(u)
+            ctx.discovered_urls.add(u)
+
+        queue = [(u, 1) for u in seed_urls[:10]]
         max_pages = 30
         max_depth = 3
 
         # 1. External Katana integration if available
-        if katana_bin and ctx.live_hosts:
+        if katana_bin and seed_urls:
             logger.info("Running Katana crawler adapter...")
             try:
-                seed_url = list(ctx.live_hosts.keys())[0]
+                seed_url = seed_urls[0]
                 cmd = [
                     katana_bin,
                     "-u", seed_url,
@@ -48,7 +57,8 @@ class Stage09WebCrawler(BaseStage):
                     for line in stdout.splitlines():
                         dest_url = line.strip()
                         if dest_url:
-                            is_in_scope, _ = ctx.scope_profile.is_in_scope(dest_url)
+                            p_dest = urlparse(dest_url)
+                            is_in_scope, _ = ctx.scope_profile.is_in_scope(dest_url, path=p_dest.path, port=p_dest.port)
                             repo.add_internal_link(
                                 assessment_id=ctx.assessment_id,
                                 source_url=seed_url,
@@ -71,7 +81,8 @@ class Stage09WebCrawler(BaseStage):
                 if current_url in crawled_urls:
                     continue
 
-                in_scope, _ = ctx.scope_profile.is_in_scope(current_url)
+                curr_p = urlparse(current_url)
+                in_scope, _ = ctx.scope_profile.is_in_scope(current_url, path=curr_p.path, port=curr_p.port)
                 if not in_scope:
                     continue
 
@@ -87,7 +98,7 @@ class Stage09WebCrawler(BaseStage):
                             dest = urljoin(current_url, href)
                             p = urlparse(dest)
                             if p.scheme in ("http", "https"):
-                                is_in, _ = ctx.scope_profile.is_in_scope(dest, path=p.path)
+                                is_in, _ = ctx.scope_profile.is_in_scope(dest, path=p.path, port=p.port)
                                 repo.add_internal_link(
                                     assessment_id=ctx.assessment_id,
                                     source_url=current_url,
@@ -115,7 +126,8 @@ class Stage09WebCrawler(BaseStage):
                         for action, method in form_matches:
                             action_url = urljoin(current_url, action) if action else current_url
                             form_method = method.upper() if method else "GET"
-                            is_in, _ = ctx.scope_profile.is_in_scope(action_url)
+                            p_act = urlparse(action_url)
+                            is_in, _ = ctx.scope_profile.is_in_scope(action_url, path=p_act.path, port=p_act.port)
                             repo.add_internal_link(
                                 assessment_id=ctx.assessment_id,
                                 source_url=current_url,
@@ -132,7 +144,8 @@ class Stage09WebCrawler(BaseStage):
                         script_matches = re.findall(r'<script\s+(?:[^>]*?\s+)?src=["\']([^"\'>\s]+)["\']', resp.text, re.IGNORECASE)
                         for src in script_matches:
                             script_url = urljoin(current_url, src)
-                            is_in, _ = ctx.scope_profile.is_in_scope(script_url)
+                            p_src = urlparse(script_url)
+                            is_in, _ = ctx.scope_profile.is_in_scope(script_url, path=p_src.path, port=p_src.port)
                             repo.add_internal_link(
                                 assessment_id=ctx.assessment_id,
                                 source_url=current_url,

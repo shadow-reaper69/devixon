@@ -31,14 +31,34 @@ class Stage12APISurvey(BaseStage):
         session = get_session()
         repo = AssessmentRepository(session)
 
+        base_urls = []
+        if ctx.target_model.target_type == "URL":
+            base_urls.append(ctx.target_model.canonical_url)
+        for u in list(ctx.live_hosts.keys()):
+            if u not in base_urls:
+                base_urls.append(u)
+        base_urls = base_urls[:5]
+
         try:
             async with httpx.AsyncClient(timeout=4.0, verify=False, follow_redirects=True) as client:
-                for base_url in list(ctx.live_hosts.keys())[:5]:
+                for base_url in base_urls:
                     ctx.check_cancelled()
-                    host = urlparse(base_url).hostname or ctx.target
+                    host = ctx.target_model.service_identity if ctx.target_model.target_type == "URL" else (urlparse(base_url).hostname or ctx.target_model.hostname)
+                    app_base_path = ctx.target_model.base_path.rstrip("/") if ctx.target_model.target_type == "URL" else ""
 
                     for path in COMMON_API_PATHS:
-                        target_url = base_url.rstrip("/") + path
+                        effective_path = f"{app_base_path}{path}" if app_base_path else path
+                        clean_base = base_url.rstrip("/")
+                        if app_base_path and clean_base.endswith(app_base_path):
+                            target_url = clean_base + path
+                        else:
+                            target_url = clean_base + effective_path
+
+                        p_target = urlparse(target_url)
+                        is_allowed, _ = ctx.scope_profile.is_in_scope(target_url, path=p_target.path, port=p_target.port)
+                        if not is_allowed:
+                            continue
+
                         try:
                             resp = await client.get(target_url)
                             if resp.status_code == 200 and len(resp.content) > 20:
@@ -50,7 +70,7 @@ class Stage12APISurvey(BaseStage):
                                         assessment_id=ctx.assessment_id,
                                         host=host,
                                         url=target_url,
-                                        path=path,
+                                        path=p_target.path,
                                         status_code=resp.status_code,
                                         content_length=len(resp.content),
                                         discovery_tool="API_DISCOVERY",
@@ -59,7 +79,7 @@ class Stage12APISurvey(BaseStage):
                                     repo.add_endpoint(
                                         assessment_id=ctx.assessment_id,
                                         url=target_url,
-                                        path=path,
+                                        path=p_target.path,
                                         method="GET",
                                         discovery_source="API_DISCOVERY",
                                     )

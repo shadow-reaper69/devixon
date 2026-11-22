@@ -64,62 +64,74 @@ class Stage05LiveHosts(BaseStage):
         timeout = httpx.Timeout(5.0, connect=3.0)
         limits = httpx.Limits(max_keepalive_connections=10, max_connections=20)
 
-        hosts_to_probe = set(ctx.discovered_subdomains)
-        # Check if original assessment target had a custom port
-        assessment = repo.get_assessment(ctx.assessment_id)
-        if assessment and ":" in assessment.target and not assessment.target.count(":") > 1:
-            hosts_to_probe.add(assessment.target)
+        urls_to_probe = []
+        if ctx.target_model.target_type == "URL":
+            urls_to_probe.append(ctx.target_model.canonical_url)
+        else:
+            hosts_to_probe = set(ctx.discovered_subdomains)
+            assessment = repo.get_assessment(ctx.assessment_id)
+            if assessment and ":" in assessment.target and not assessment.target.count(":") > 1:
+                hosts_to_probe.add(assessment.target)
+
+            for host in hosts_to_probe:
+                for proto in ["https", "http"]:
+                    urls_to_probe.append(f"{proto}://{host}")
 
         try:
             async with httpx.AsyncClient(timeout=timeout, limits=limits, verify=False, follow_redirects=True) as client:
-                for host in hosts_to_probe:
+                for url in urls_to_probe:
                     ctx.check_cancelled()
+                    start_t = time.perf_counter()
+                    try:
+                        resp = await client.get(url, headers={"User-Agent": "devixon/0.2.0-probe"})
+                        elapsed_ms = round((time.perf_counter() - start_t) * 1000, 2)
 
-                    for proto in ["https", "http"]:
-                        url = f"{proto}://{host}"
-                        start_t = time.perf_counter()
-                        try:
-                            resp = await client.get(url, headers={"User-Agent": "devixon/0.2.0-probe"})
-                            elapsed_ms = round((time.perf_counter() - start_t) * 1000, 2)
+                        server = resp.headers.get("server", "")
+                        content_type = resp.headers.get("content-type", "")
+                        title = self._extract_title(resp.text)
+                        redirect_dest = str(resp.url) if str(resp.url).rstrip("/") != url.rstrip("/") else None
 
-                            server = resp.headers.get("server", "")
-                            content_type = resp.headers.get("content-type", "")
-                            title = self._extract_title(resp.text)
-                            redirect_dest = str(resp.url) if str(resp.url).rstrip("/") != url.rstrip("/") else None
-                            techs = self._detect_technologies(resp)
+                        # If redirect occurred, validate authorization on destination
+                        if redirect_dest:
+                            is_dest_in_scope, dest_reason = ctx.scope_profile.is_in_scope(redirect_dest)
+                            if not is_dest_in_scope:
+                                logger.warning(f"Redirect destination '{redirect_dest}' is OUT OF SCOPE ({dest_reason}). Preserving original url only.")
 
-                            lh = repo.add_live_host(
-                                assessment_id=ctx.assessment_id,
-                                url=url,
-                                host=host,
-                                status_code=resp.status_code,
-                                title=title,
-                                web_server=server,
-                                technologies=techs,
-                                content_type=content_type,
-                                response_time_ms=elapsed_ms,
-                                redirect_destination=redirect_dest,
-                            )
+                        techs = self._detect_technologies(resp)
+                        service_host = ctx.target_model.service_identity if ctx.target_model.target_type == "URL" else (resp.url.host or ctx.target_model.hostname)
 
-                            ctx.live_hosts[url] = {
-                                "id": lh.id,
-                                "host": host,
-                                "url": url,
-                                "status_code": resp.status_code,
-                                "server": server,
-                                "content_type": content_type,
-                                "content_length": len(resp.content),
-                                "title": title,
-                                "response_time_ms": elapsed_ms,
-                                "redirect_destination": redirect_dest,
-                                "technologies": techs,
-                                "headers": dict(resp.headers),
-                                "cookies": dict(resp.cookies),
-                                "body_sample": resp.text[:1500],
-                            }
-                            logger.info(f"Live host detected: {url} -> HTTP {resp.status_code} ({title or 'No title'}) [{elapsed_ms}ms]")
-                        except Exception:
-                            continue
+                        lh = repo.add_live_host(
+                            assessment_id=ctx.assessment_id,
+                            url=url,
+                            host=service_host,
+                            status_code=resp.status_code,
+                            title=title,
+                            web_server=server,
+                            technologies=techs,
+                            content_type=content_type,
+                            response_time_ms=elapsed_ms,
+                            redirect_destination=redirect_dest,
+                        )
+
+                        ctx.live_hosts[url] = {
+                            "id": lh.id,
+                            "host": service_host,
+                            "url": url,
+                            "status_code": resp.status_code,
+                            "server": server,
+                            "content_type": content_type,
+                            "content_length": len(resp.content),
+                            "title": title,
+                            "response_time_ms": elapsed_ms,
+                            "redirect_destination": redirect_dest,
+                            "technologies": techs,
+                            "headers": dict(resp.headers),
+                            "cookies": dict(resp.cookies),
+                            "body_sample": resp.text[:1500],
+                        }
+                        logger.info(f"Live host detected: {url} -> HTTP {resp.status_code} ({title or 'No title'}) [{elapsed_ms}ms]")
+                    except Exception:
+                        continue
 
             logger.info(f"Identified and persisted {len(ctx.live_hosts)} active HTTP live hosts.")
         finally:

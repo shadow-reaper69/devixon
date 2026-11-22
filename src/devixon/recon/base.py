@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, Set
 from pydantic import BaseModel, Field
 from devixon.core.scope import ScopeProfile
+from devixon.core.target import CanonicalTarget, parse_canonical_target
 from devixon.core.exceptions import DevixonError, ScanCancelledError
 from devixon.core.logger import logger
 from devixon.database.repository import AssessmentRepository
@@ -21,6 +22,7 @@ class ScanContext:
         target: str,
         scope_profile: ScopeProfile,
         scan_profile: str = "QUICK",
+        target_model: Optional[CanonicalTarget] = None,
     ):
         self.assessment_id = assessment_id
         self.target = target
@@ -28,8 +30,19 @@ class ScanContext:
         self.scan_profile = scan_profile
         self.is_cancelled = False
 
+        if target_model is not None:
+            self.target_model = target_model
+        else:
+            self.target_model = parse_canonical_target(target)
+
+        self.scheme = self.target_model.scheme
+        self.port = self.target_model.port
+        self.base_path = self.target_model.base_path
+        self.canonical_url = self.target_model.canonical_url
+        self.service_identity = self.target_model.service_identity
+
         # Working data shared between stages
-        self.discovered_subdomains: Set[str] = {target}
+        self.discovered_subdomains: Set[str] = {self.target_model.hostname}
         self.subdomain_records: Dict[str, Dict[str, Any]] = {}  # sub -> {resolved_ip, status, source, records}
         self.dns_records: Dict[str, Dict[str, List[str]]] = {}  # host -> {record_type: [values]}
         self.live_hosts: Dict[str, Dict[str, Any]] = {}  # url -> info

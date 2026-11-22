@@ -3,6 +3,7 @@ Stage 17: Final Report Generation.
 Generates comprehensive HTML, Markdown, JSON, and CSV reports containing all 15 reconnaissance intelligence sections.
 """
 
+import re
 from pathlib import Path
 from devixon.recon.base import BaseStage, ScanContext
 from devixon.database.session import get_session
@@ -55,7 +56,8 @@ class Stage17ReportGeneration(BaseStage):
             stages = session.query(ScanStage).filter(ScanStage.assessment_id == ctx.assessment_id).all()
 
             generator = ReportGenerator()
-            base_filename = f"devixon_report_{ctx.target.replace('.', '_')}_{ctx.assessment_id[:8]}"
+            safe_target = re.sub(r"[^a-zA-Z0-9_\-]", "_", ctx.target)
+            base_filename = f"devixon_report_{safe_target}_{ctx.assessment_id[:8]}"
 
             html_file = reports_dir / f"{base_filename}.html"
             md_file = reports_dir / f"{base_filename}.md"

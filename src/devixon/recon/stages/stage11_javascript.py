@@ -44,7 +44,7 @@ class Stage11JavaScriptIntelligence(BaseStage):
                         if resp.status_code != 200:
                             continue
                         text = resp.text
-                        host = urlparse(js_url).hostname or ctx.target
+                        host = ctx.target_model.service_identity if ctx.target_model.target_type == "URL" else (urlparse(js_url).hostname or ctx.target_model.hostname)
 
                         # 1. Routes & API paths
                         routes = list(set(ROUTE_PATTERN.findall(text)))

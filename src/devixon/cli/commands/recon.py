@@ -9,7 +9,8 @@ from typing import Optional
 import typer
 from rich.console import Console
 from rich.table import Table
-from devixon.core.scope import ScopeProfile, normalize_target
+from devixon.core.scope import ScopeProfile
+from devixon.core.target import CanonicalTarget, parse_canonical_target
 from devixon.core.config import DEFAULT_DATA_DIR
 from devixon.database.session import get_session, init_db
 from devixon.database.repository import AssessmentRepository
@@ -22,14 +23,23 @@ console = Console()
 SCOPES_DIR = DEFAULT_DATA_DIR / "scopes"
 
 
-def _load_scope(name: str, target: str) -> ScopeProfile:
+def _load_scope(name: str, target_model: CanonicalTarget) -> ScopeProfile:
     p = SCOPES_DIR / f"{name}.json"
     if p.exists():
         return ScopeProfile.model_validate_json(p.read_text(encoding="utf-8"))
+
+    allowed_domains = [target_model.hostname]
+    allowed_ips = [target_model.hostname] if target_model.target_type == "IP" else []
+    allowed_ports = [target_model.port] if target_model.port else []
+    allowed_paths = [target_model.base_path] if target_model.base_path and target_model.base_path != "/" else []
+
     return ScopeProfile(
         name=name,
-        primary_domain=target,
-        allowed_domains=[target],
+        primary_domain=target_model.canonical_url if target_model.target_type == "URL" else target_model.hostname,
+        allowed_domains=allowed_domains,
+        allowed_ips=allowed_ips,
+        allowed_ports=allowed_ports,
+        allowed_paths=allowed_paths,
         authorized_by_user=True,
     )
 
@@ -41,8 +51,8 @@ def run_recon(
 ):
     """Internal helper to execute a reconnaissance pipeline asynchronously."""
     init_db()
-    norm_target = normalize_target(target)
-    scope = _load_scope(scope_name, norm_target)
+    target_model = parse_canonical_target(target)
+    scope = _load_scope(scope_name, target_model)
 
     # Validate authorization
     if profile != "PASSIVE" and not scope.authorized_by_user:
@@ -50,10 +60,12 @@ def run_recon(
         console.print("Use 'devixon scope create --authorized' before launching active reconnaissance.")
         raise typer.Exit(1)
 
+    target_to_store = target_model.canonical_url if target_model.target_type == "URL" else target_model.hostname
+
     session = get_session()
     repo = AssessmentRepository(session)
     assessment = repo.create_assessment(
-        target=norm_target,
+        target=target_to_store,
         scope_profile_json=scope.model_dump_json(),
         scan_profile=profile,
     )
@@ -61,14 +73,15 @@ def run_recon(
 
     ctx = ScanContext(
         assessment_id=assessment.id,
-        target=norm_target,
+        target=target_to_store,
         scope_profile=scope,
         scan_profile=profile,
+        target_model=target_model,
     )
 
     pipeline = ReconPipeline(ctx)
     console.print(f"\n[bold cyan]LAUNCHING DEVIXON RECONNAISSANCE [{profile}][/bold cyan]")
-    console.print(f"Target: [bold]{norm_target}[/bold] | Assessment ID: [dim]{assessment.id}[/dim]\n")
+    console.print(f"Target: [bold]{target_to_store}[/bold] | Assessment ID: [dim]{assessment.id}[/dim]\n")
 
     try:
         asyncio.run(pipeline.execute_all())
@@ -80,8 +93,11 @@ def run_recon(
         raise typer.Exit(1)
 
 
+TARGET_HELP = "Target domain, IP address, or full HTTP/HTTPS URL."
+
+
 def subdomains(
-    target: str = typer.Option(..., "--target", "-t", help="Target domain."),
+    target: str = typer.Option(..., "--target", "-t", help=TARGET_HELP),
     scope_name: str = typer.Option("default", "--scope", "-s", help="Scope profile name."),
 ):
     """Run subdomain discovery and DNS enumeration only."""
@@ -89,7 +105,7 @@ def subdomains(
 
 
 def hosts(
-    target: str = typer.Option(..., "--target", "-t", help="Target domain or host."),
+    target: str = typer.Option(..., "--target", "-t", help=TARGET_HELP),
     scope_name: str = typer.Option("default", "--scope", "-s", help="Scope profile name."),
 ):
     """Run live HTTP/HTTPS host and service discovery only."""
@@ -97,7 +113,7 @@ def hosts(
 
 
 def crawl(
-    target: str = typer.Option(..., "--target", "-t", help="Target domain or host."),
+    target: str = typer.Option(..., "--target", "-t", help=TARGET_HELP),
     scope_name: str = typer.Option("default", "--scope", "-s", help="Scope profile name."),
 ):
     """Run scope-governed web link crawler."""
@@ -105,7 +121,7 @@ def crawl(
 
 
 def paths(
-    target: str = typer.Option(..., "--target", "-t", help="Target domain or host."),
+    target: str = typer.Option(..., "--target", "-t", help=TARGET_HELP),
     scope_name: str = typer.Option("default", "--scope", "-s", help="Scope profile name."),
 ):
     """Run safe directory and file path discovery."""
@@ -113,7 +129,7 @@ def paths(
 
 
 def urls(
-    target: str = typer.Option(..., "--target", "-t", help="Target domain or host."),
+    target: str = typer.Option(..., "--target", "-t", help=TARGET_HELP),
     scope_name: str = typer.Option("default", "--scope", "-s", help="Scope profile name."),
 ):
     """Run historical URL intelligence from archives."""
@@ -121,7 +137,7 @@ def urls(
 
 
 def endpoints(
-    target: str = typer.Option(..., "--target", "-t", help="Target domain or host."),
+    target: str = typer.Option(..., "--target", "-t", help=TARGET_HELP),
     scope_name: str = typer.Option("default", "--scope", "-s", help="Scope profile name."),
 ):
     """Run endpoint, API, and parameter extraction."""
@@ -129,7 +145,7 @@ def endpoints(
 
 
 def passive(
-    target: str = typer.Option(..., "--target", "-t", help="Target domain."),
+    target: str = typer.Option(..., "--target", "-t", help=TARGET_HELP),
     scope_name: str = typer.Option("default", "--scope", "-s", help="Scope profile name."),
 ):
     """Run purely passive OSINT reconnaissance without sending active packets."""
@@ -137,7 +153,7 @@ def passive(
 
 
 def quick(
-    target: str = typer.Option(..., "--target", "-t", help="Target domain."),
+    target: str = typer.Option(..., "--target", "-t", help=TARGET_HELP),
     scope_name: str = typer.Option("default", "--scope", "-s", help="Scope profile name."),
 ):
     """Run quick reconnaissance and non-destructive HTTP security posture checks."""
@@ -145,7 +161,7 @@ def quick(
 
 
 def full(
-    target: str = typer.Option(..., "--target", "-t", help="Target domain."),
+    target: str = typer.Option(..., "--target", "-t", help=TARGET_HELP),
     scope_name: str = typer.Option("default", "--scope", "-s", help="Scope profile name."),
 ):
     """Run full authorized reconnaissance and web security assessment pipeline."""

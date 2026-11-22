@@ -2,6 +2,7 @@
 CLI Report Generation and Export Commands.
 """
 
+import re
 from pathlib import Path
 from typing import Optional
 import shutil
@@ -64,7 +65,8 @@ def generate_report(
         stages = session.query(ScanStage).filter(ScanStage.assessment_id == assessment.id).all()
 
         generator = ReportGenerator()
-        base_name = f"devixon_{assessment.target.replace('.', '_')}_{assessment.id[:8]}"
+        safe_target = re.sub(r"[^a-zA-Z0-9_\-]", "_", assessment.target)
+        base_name = f"devixon_{safe_target}_{assessment.id[:8]}"
 
         console.print(f"\n[bold cyan]GENERATING REPORTS FOR {assessment.target} ({assessment.id[:8]})[/bold cyan]\n")
 

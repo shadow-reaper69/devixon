@@ -23,12 +23,17 @@ class Stage10EndpointExtraction(BaseStage):
             for url in list(ctx.discovered_urls):
                 ctx.check_cancelled()
                 parsed = urlparse(url)
-                host = parsed.hostname or ctx.target
+                # Verify scope policy before persisting endpoint
+                is_in, _ = ctx.scope_profile.is_in_scope(url, path=parsed.path, port=parsed.port)
+                if not is_in:
+                    continue
+
+                host = parsed.hostname or ctx.target_model.hostname
 
                 # Find asset if present
                 asset = session.query(Asset).filter(
                     Asset.assessment_id == ctx.assessment_id,
-                    Asset.hostname == host
+                    (Asset.hostname == host) | (Asset.hostname == ctx.target_model.hostname)
                 ).first()
                 asset_id = asset.id if asset else None
 

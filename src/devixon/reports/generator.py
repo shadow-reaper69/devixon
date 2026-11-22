@@ -170,6 +170,8 @@ class ReportGenerator:
             f"- **Primary Target**: `{scope_info.get('primary_domain', assessment.target)}`",
             f"- **Allowed Domains**: {', '.join(scope_info.get('allowed_domains', [])) or 'None'}",
             f"- **Allowed IPs/CIDRs**: {', '.join(scope_info.get('allowed_ips', [])) or 'None'}",
+            f"- **Allowed Ports**: {', '.join(str(p) for p in scope_info.get('allowed_ports', [])) or 'None'}",
+            f"- **Allowed Paths**: {', '.join(scope_info.get('allowed_paths', [])) or 'None'}",
             f"- **Excluded Targets**: {', '.join(scope_info.get('excluded_targets', [])) or 'None'}",
             f"- **Excluded Paths**: {', '.join(scope_info.get('excluded_paths', [])) or 'None'}",
             f"- **User Authorization Confirmed**: {scope_info.get('authorized_by_user', False)}\n",

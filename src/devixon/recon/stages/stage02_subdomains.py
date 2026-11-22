@@ -20,12 +20,12 @@ class Stage02SubdomainDiscovery(BaseStage):
     name = "Subdomain Discovery & Resolution"
 
     async def execute(self, ctx: ScanContext) -> None:
-        target = ctx.target
+        target = ctx.target_model.hostname
         session = get_session()
         repo = AssessmentRepository(session)
 
         # 1. Check if target is localhost or an IP address
-        is_ip_or_localhost = target.lower() in ("localhost", "127.0.0.1", "::1")
+        is_ip_or_localhost = target.lower() in ("localhost", "127.0.0.1", "::1") or ctx.target_model.target_type == "IP"
         if not is_ip_or_localhost:
             try:
                 ipaddress.ip_address(target)

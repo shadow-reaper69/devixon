@@ -49,13 +49,18 @@ class Stage13ContentDiscovery(BaseStage):
         repo = AssessmentRepository(session)
 
         ffuf_bin = shutil.which("ffuf")
-        base_urls = list(ctx.live_hosts.keys())[:5]
+        base_urls = []
+        if ctx.target_model.target_type == "URL":
+            base_urls.append(ctx.target_model.canonical_url)
+        for u in list(ctx.live_hosts.keys()):
+            if u not in base_urls:
+                base_urls.append(u)
+        base_urls = base_urls[:5]
 
         # 1. External FFUF integration if available
         if ffuf_bin and base_urls and ctx.scan_profile == "FULL":
             logger.info("Running FFUF adapter with safe rate limits...")
-            # We can run ffuf or fallback
-            # Note: bounded rate limits: -rate 10 -t 2
+            # Bounded rate limits: -rate 10 -t 2
 
         # 2. Native Safe Async Path Prober
         limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
@@ -65,12 +70,23 @@ class Stage13ContentDiscovery(BaseStage):
             async with httpx.AsyncClient(timeout=timeout, limits=limits, verify=False, follow_redirects=False) as client:
                 for base_url in base_urls:
                     ctx.check_cancelled()
-                    host = urlparse(base_url).hostname or ctx.target
+                    host = ctx.target_model.service_identity if ctx.target_model.target_type == "URL" else (urlparse(base_url).hostname or ctx.target_model.hostname)
 
-                    for path in SAFE_DISCOVERY_WORDLIST:
+                    # Preserve target base path if specified
+                    app_base_path = ctx.target_model.base_path.rstrip("/") if ctx.target_model.target_type == "URL" else ""
+
+                    for word in SAFE_DISCOVERY_WORDLIST:
                         ctx.check_cancelled()
-                        target_url = base_url.rstrip("/") + path
-                        is_allowed, _ = ctx.scope_profile.is_in_scope(target_url, path=path)
+                        effective_path = f"{app_base_path}{word}" if app_base_path else word
+                        clean_base = base_url.rstrip("/")
+                        # If base_url already contains app_base_path, avoid duplicate prefix
+                        if app_base_path and clean_base.endswith(app_base_path):
+                            target_url = clean_base + word
+                        else:
+                            target_url = clean_base + effective_path
+
+                        p_target = urlparse(target_url)
+                        is_allowed, _ = ctx.scope_profile.is_in_scope(target_url, path=p_target.path, port=p_target.port)
                         if not is_allowed:
                             continue
 
@@ -89,7 +105,7 @@ class Stage13ContentDiscovery(BaseStage):
                                     assessment_id=ctx.assessment_id,
                                     host=host,
                                     url=target_url,
-                                    path=path,
+                                    path=p_target.path,
                                     status_code=status,
                                     content_length=content_len,
                                     redirect_location=redirect_loc,
@@ -100,7 +116,7 @@ class Stage13ContentDiscovery(BaseStage):
 
                                 ctx.discovered_paths.append({
                                     "url": target_url,
-                                    "path": path,
+                                    "path": p_target.path,
                                     "status_code": status,
                                     "content_length": content_len,
                                     "redirect": redirect_loc,
