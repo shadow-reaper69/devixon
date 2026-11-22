@@ -67,6 +67,7 @@ class DVWAMockHandler(BaseHTTPRequestHandler):
                 <h1>DVWA Vulnerability Lab</h1>
                 <a href="/DVWA/vulnerabilities/sqli/">SQL Injection Lab</a>
                 <a href="/DVWA/setup.php">Setup & Check</a>
+                <a href="/DVWA/logout.php">Logout (Excluded)</a>
                 <a href="{ctfd_link}">Link to CTFd Platform</a>
                 <a href="/phpmyadmin/index.php">phpMyAdmin Outside Scope</a>
                 <a href="/DVWA/../secret">Traversal Link</a>
@@ -164,6 +165,7 @@ async def test_dvwa_target_pipeline_e2e(multi_app_lab, tmp_path):
         allowed_ips=["127.0.0.1"],
         allowed_ports=[dvwa_port],
         allowed_paths=["/DVWA/"],
+        excluded_paths=["/logout", "/admin/delete"],
         authorized_by_user=True,
     )
 
@@ -213,10 +215,17 @@ async def test_dvwa_target_pipeline_e2e(multi_app_lab, tmp_path):
         for l in phpmyadmin_links:
             assert l.is_internal is False
 
+        # Excluded path /logout must be marked is_internal=False in extracted links
+        logout_links = [l for l in links if "logout" in l.destination_url]
+        for l in logout_links:
+            assert l.is_internal is False
+
         # 3. Discovered paths remain under /DVWA/
         paths = session.query(DiscoveredPath).filter_by(assessment_id=assessment_id).all()
         for p in paths:
             assert p.path.startswith("/DVWA"), f"Path leaked outside /DVWA: {p.path}"
+        # Excluded path /logout must never be in DiscoveredPath
+        assert not any("logout" in p.path for p in paths)
 
         # 4. Endpoints extracted
         endpoints = session.query(Endpoint).filter_by(assessment_id=assessment_id).all()
@@ -224,6 +233,8 @@ async def test_dvwa_target_pipeline_e2e(multi_app_lab, tmp_path):
             assert str(ctfd_port) not in ep.url
             assert "challenges" not in ep.url
             assert ep.path.startswith("/DVWA")
+        # Excluded path /logout must never be in Endpoints
+        assert not any("logout" in ep.url or "logout" in ep.path for ep in endpoints)
 
         # 5. Verify Report Generation shows the exact target URL
         report_gen = ReportGenerator()
@@ -249,3 +260,34 @@ async def test_dvwa_target_pipeline_e2e(multi_app_lab, tmp_path):
 
     # The external link to CTFd is explicitly classified as out-of-scope (False)
     assert "False" in md_content
+
+
+def is_live_dvwa_running() -> bool:
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(0.5)
+        res = s.connect_ex(("127.0.0.1", 8080))
+        s.close()
+        return res == 0
+    except Exception:
+        return False
+
+
+@pytest.mark.skipif(not is_live_dvwa_running(), reason="Live DVWA at http://127.0.0.1:8080/DVWA/ is not currently running.")
+@pytest.mark.asyncio
+async def test_live_dvwa_when_running():
+    target = "http://127.0.0.1:8080/DVWA/"
+    target_model = parse_canonical_target(target)
+    scope = ScopeProfile(
+        name="dvwa_local_lab",
+        primary_domain=target,
+        allowed_ips=["127.0.0.1"],
+        allowed_ports=[8080],
+        allowed_paths=["/DVWA/"],
+        excluded_paths=["/logout", "/admin/delete"],
+        authorized_by_user=True,
+    )
+    assert scope.is_in_scope("http://127.0.0.1:8080/DVWA/login.php")[0] is True
+    assert scope.is_in_scope("http://127.0.0.1:8080/DVWA/logout.php")[0] is False
+    assert scope.is_in_scope("http://127.0.0.1:80/challenges")[0] is False
+

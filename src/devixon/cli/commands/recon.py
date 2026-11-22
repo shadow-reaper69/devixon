@@ -26,7 +26,26 @@ SCOPES_DIR = DEFAULT_DATA_DIR / "scopes"
 def _load_scope(name: str, target_model: CanonicalTarget) -> ScopeProfile:
     p = SCOPES_DIR / f"{name}.json"
     if p.exists():
-        return ScopeProfile.model_validate_json(p.read_text(encoding="utf-8"))
+        scope = ScopeProfile.model_validate_json(p.read_text(encoding="utf-8"))
+
+        # Target-port authorization validation & backward-compatible scope alignment
+        if target_model.port is not None and target_model.target_type == "URL":
+            if scope.allowed_ports:
+                if target_model.port not in scope.allowed_ports:
+                    raise ScopeViolationError(
+                        f"Target port {target_model.port} is NOT authorized in scope profile '{name}' (allowed ports: {scope.allowed_ports})."
+                    )
+            else:
+                scope.allowed_ports = [target_model.port]
+
+        # Target base-path confinement
+        if target_model.base_path and target_model.base_path != "/":
+            if not scope.allowed_paths:
+                scope.allowed_paths = [target_model.base_path]
+            elif target_model.base_path not in scope.allowed_paths:
+                scope.allowed_paths.append(target_model.base_path)
+
+        return scope
 
     allowed_domains = [target_model.hostname]
     allowed_ips = [target_model.hostname] if target_model.target_type == "IP" else []

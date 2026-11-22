@@ -9,7 +9,7 @@ import posixpath
 import re
 from typing import List, Optional, Tuple, Set
 from urllib.parse import urlparse, urlsplit
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from devixon.core.exceptions import ScopeViolationError, TargetValidationError
 from devixon.core.target import CanonicalTarget, parse_canonical_target
 
@@ -60,6 +60,14 @@ class ScopeProfile(BaseModel):
     timeout: int = 15  # seconds
     authorized_by_user: bool = False
     scope_notes: Optional[str] = None
+
+    @field_validator("allowed_ports")
+    @classmethod
+    def validate_allowed_ports(cls, ports: List[int]) -> List[int]:
+        for p in ports:
+            if not (1 <= p <= 65535):
+                raise ValueError(f"Port {p} is invalid. Must be between 1 and 65535.")
+        return ports
 
     def validate_authorization(self) -> None:
         """Enforces that explicit user authorization has been recorded."""
@@ -141,9 +149,13 @@ class ScopeProfile(BaseModel):
                 if target_port not in self.allowed_ports:
                     return False, f"Port {target_port} is not in allowed_ports list: {self.allowed_ports}."
             # If no allowed_ports, but primary target specified a specific port (e.g. 8080), restrict to that port
-            elif primary_port is not None and primary_info and primary_info.target_type == "URL":
+            elif primary_port is not None and primary_info:
                 if target_port != primary_port:
                     return False, f"Port {target_port} does not match target application port {primary_port}."
+            else:
+                # Backward-compatible default: when allowed_ports is empty, only standard web ports (80, 443) are allowed
+                if target_port not in (80, 443):
+                    return False, f"Port {target_port} is not authorized. Standard web ports (80, 443) permitted by default; use --allowed-ports to authorize custom ports."
 
         # 3. Check Path Validations and Exclusions
         if target_path:

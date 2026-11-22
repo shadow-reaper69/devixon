@@ -164,3 +164,91 @@ def test_scope_out_of_scope_redirect():
     # Redirect to same host on port 80
     allowed, _ = scope.is_in_scope("http://127.0.0.1:80/")
     assert allowed is False
+
+
+def test_port_validation_range():
+    # Valid port
+    scope = ScopeProfile(
+        primary_domain="127.0.0.1",
+        allowed_ports=[8080, 8443, 80],
+        authorized_by_user=True,
+    )
+    assert scope.allowed_ports == [8080, 8443, 80]
+
+    # Invalid port 0
+    with pytest.raises(ValueError):
+        ScopeProfile(
+            primary_domain="127.0.0.1",
+            allowed_ports=[0],
+            authorized_by_user=True,
+        )
+
+    # Invalid port > 65535
+    with pytest.raises(ValueError):
+        ScopeProfile(
+            primary_domain="127.0.0.1",
+            allowed_ports=[70000],
+            authorized_by_user=True,
+        )
+
+
+def test_path_exclusions_dvwa():
+    scope = ScopeProfile(
+        primary_domain="http://127.0.0.1:8080/DVWA/",
+        allowed_ips=["127.0.0.1"],
+        allowed_ports=[8080],
+        allowed_paths=["/DVWA/"],
+        excluded_paths=["/logout", "/admin/delete"],
+        authorized_by_user=True,
+    )
+
+    # In-scope path
+    allowed, _ = scope.is_in_scope("http://127.0.0.1:8080/DVWA/vulnerabilities/sqli/")
+    assert allowed is True
+
+    # Excluded /logout path
+    allowed, reason = scope.is_in_scope("http://127.0.0.1:8080/DVWA/logout.php")
+    assert allowed is False
+    assert "excluded path" in reason
+
+    # Excluded /admin/delete path
+    allowed, reason = scope.is_in_scope("http://127.0.0.1:8080/DVWA/admin/delete_user.php")
+    assert allowed is False
+    assert "excluded path" in reason
+
+
+def test_legacy_scope_backward_compatibility():
+    # Legacy scope with no allowed_ports specified
+    scope = ScopeProfile(
+        primary_domain="example.com",
+        allowed_domains=["example.com"],
+        authorized_by_user=True,
+    )
+
+    # Standard web ports 80 and 443 are permitted by default
+    allowed, _ = scope.is_in_scope("http://example.com/index.html")
+    assert allowed is True
+
+    allowed, _ = scope.is_in_scope("https://example.com/dashboard")
+    assert allowed is True
+
+    # Non-standard custom ports like 8080 are NOT silently authorized
+    allowed, reason = scope.is_in_scope("http://example.com:8080/test")
+    assert allowed is False
+    assert "not authorized" in reason.lower()
+
+
+def test_redirect_to_unauthorized_port():
+    scope = ScopeProfile(
+        primary_domain="http://127.0.0.1:8080/DVWA/",
+        allowed_ips=["127.0.0.1"],
+        allowed_ports=[8080],
+        allowed_paths=["/DVWA/"],
+        authorized_by_user=True,
+    )
+
+    # Redirect to unauthorized port 9090
+    allowed, reason = scope.is_in_scope("http://127.0.0.1:9090/callback")
+    assert allowed is False
+    assert "port" in reason.lower()
+
