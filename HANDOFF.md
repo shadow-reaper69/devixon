@@ -1,60 +1,53 @@
 # DEVIXON — HANDOFF STATUS & ROADMAP
 
-## Current State: Reconnaissance Engine Upgrade Complete & Verified
+## Current State: Full URL Target Support & Multi-Application Isolation Complete & Verified
 
-### 1. Architectural Upgrades & Database Models
-- **Database Models Added**:
-  - `Subdomain`: Explicit `NOT_APPLICABLE` support for localhost / IP targets, DNS records JSON, resolved IP, resolution status, discovery source.
-  - `DNSRecord`: Host, record type (`A`, `AAAA`, `CNAME`, `MX`, `TXT`, `NS`), resolved values, TTL.
-  - `LiveHost`: Discovered HTTP/HTTPS hosts, status code, title, web server, detected technologies, content type, response time (ms), redirect destination.
-  - `DiscoveredPath`: Wordlist fuzzing and discovery files, status codes, content lengths, redirect locations, response times, discovery tool (`FFUF` / native).
-  - `InternalLink`: Crawler links, source and destination URLs, method, link type (`a_href`, `form_action`, `script_src`), internal/external classification, crawl depth.
-  - `Endpoint`: URLs, paths, methods, historical vs live distinction (`is_historical`), discovery source.
-  - `Parameter`: Discovered query and body parameters, endpoint mapping, example values.
-  - `JavaScriptAsset`: JavaScript file URLs, discovered routes/endpoints, source map links, and strictly masked/sanitized secret patterns.
-  - `Technology`: Fingerprinted software, servers, frameworks, CMS, and libraries with confidence ratings.
-- **SQLite Migrations**: Automatic schema migration in `init_db()` ensures columns (`assessment_id`, `is_historical`, etc.) are seamlessly added without data loss.
+### 1. Canonical Target Model & URL Parser (`src/devixon/core/target.py`)
+- **`CanonicalTarget` Model**:
+  - `original_input`: Preserves exact user target input.
+  - `scheme`: `"http"`, `"https"`, or `None` for bare domain/IP.
+  - `hostname`: Clean, validated lowercased hostname or IP.
+  - `port`: Explicit port or default port (HTTP: 80, HTTPS: 443).
+  - `base_path`: Directory base path (e.g. `/DVWA/`, `/app/`, `/`).
+  - `canonical_url`: Normalized URL preserving explicit ports and directory paths.
+  - `target_type`: `"URL"`, `"DOMAIN"`, or `"IP"`.
+  - `service_identity`: Unique service identifier combining `scheme + hostname + port` (e.g. `http://127.0.0.1:8080` vs `http://127.0.0.1:80`).
+- **Validation**:
+  - Pydantic `HttpUrl` validation via `TypeAdapter(HttpUrl).validate_python`.
+  - Base-path traversal detection rejecting attempts like `/../` and `/DVWA/../secret`.
+  - Preservation of explicit ports and base paths without silent stripping.
 
-### 2. Reconnaissance Pipeline Enhancements
-- **Subdomain Enumeration**: Integrated `subfinder`, `amass`, `dnsx` adapters + native crt.sh and dnspython fallback. Localhost/IP targets are explicitly tagged `NOT_APPLICABLE`.
-- **Live Host Discovery**: Integrated ProjectDiscovery `httpx` + native async httpx client prober collecting response times, redirects, titles, servers, and technologies.
-- **Directory and File Discovery**: Integrated `ffuf` + native safe wordlist path discoverer recording status codes, content lengths, redirects, and execution metrics.
-- **Internal Link Crawling**: Integrated `katana` + native async HTML/JS crawler recording real links, methods, link types, depths, and internal/external flags.
-- **URL & Endpoint Intelligence**: Integrated `gau`, `waybackurls`, and `katana` with clear separation of historical archive URLs from live endpoints.
-- **JavaScript Intelligence**: Extracts client-side routes, API paths, source maps, and applies strict masking to discovered secrets.
-- **API Discovery**: Automatically identifies OpenAPI/Swagger documentation, GraphQL endpoints, and REST schema routes.
+### 2. Scope Engine Enhancements (`src/devixon/core/scope.py`)
+- **Port Policy Enforcement**:
+  - Validates ports against `allowed_ports` or primary target port constraints.
+  - Out-of-scope ports (such as port 80 during an 8080 scan) are strictly rejected.
+- **Base Path & Path Traversal Confinement**:
+  - Confinements paths to `allowed_paths` and target `base_path`.
+  - Detects and rejects path traversal sequences (`/../`, `/..`).
+- **Redirect Validation**:
+  - Validates redirect destinations against authorized domain, IP, port, and path rules.
+- **Dynamic Scopes**:
+  - `_load_scope()` in `recon.py` automatically configures `primary_domain`, `allowed_ips`, `allowed_ports`, and `allowed_paths` from `CanonicalTarget`.
 
-### 3. Expanded CLI Suite
-- `devixon recon subdomains` — Subdomain enumeration and DNS resolution only.
-- `devixon recon hosts` — Live HTTP/HTTPS host and service discovery only.
-- `devixon recon crawl` — Scope-governed internal link crawler.
-- `devixon recon paths` — Directory and file path discovery.
-- `devixon recon urls` — Historical URL intelligence from archives.
-- `devixon recon endpoints` — Endpoint, API, and parameter extraction.
-- `devixon recon full` — Complete 18-stage assessment pipeline.
-- `devixon paths list` — List discovered directories and files with status codes and lengths.
-- `devixon assets list` — Real subdomain, IP, and live service inventory.
-- `devixon assets inspect` — Deep inspection of host intelligence, open ports, and technologies.
-- `devixon endpoints list` — Complete endpoint and query parameter inventory.
+### 3. Pipeline Multi-Stage Integration
+- **`STAGE_00` Scope Validation**: Enforces full URL validation against `allowed_ports` and `allowed_paths`.
+- **`STAGE_02` Subdomain Discovery**: Accurately recognizes localhost/IP URL targets and tags subdomain enumeration as `NOT_APPLICABLE`.
+- **`STAGE_05` Live Host Discovery**: Directly probes `ctx.target_model.canonical_url` and records `LiveHost` keyed to `service_identity`.
+- **`STAGE_06` Service Discovery**: Restricts port probing to in-scope ports (`ctx.target_model.port` / `allowed_ports`), preventing probe leakage into CTFd on port 80.
+- **`STAGE_09` Crawler**: Seeds from `ctx.target_model.canonical_url`, confines crawling strictly within `base_path` on the allowed port, and classifies external/cross-port links as `is_internal=False`.
+- **`STAGE_10` Endpoints**: Extracts endpoints under the authorized `base_path` and maps to asset without port confusion.
+- **`STAGE_12` APIs & `STAGE_13` Content Discovery**: Prepends `base_path` to discovery wordlists (e.g. `/DVWA/admin`, `/DVWA/robots.txt`) and enforces scope before every request.
+- **`STAGE_17` & Reports**: Sanitizes output file names across Windows/POSIX environments and displays exact `assessment.target` in reports.
 
-### 4. 15-Section Comprehensive Reporting
-Generated HTML (dark theme) and Markdown reports now comprehensively present all 15 intelligence sections:
-1. Executive Summary
-2. Scope Information
-3. Subdomain Inventory
-4. DNS Intelligence
-5. Live Hosts
-6. Technology Fingerprinting
-7. Discovered Directories and Files
-8. Internal Links Crawled
-9. URL Inventory (Historical vs Live)
-10. Endpoint Inventory
-11. Parameter Inventory
-12. JavaScript Intelligence
-13. API Discoveries
-14. Security Posture Findings
-15. Scan Coverage and Errors
+### 4. CLI Enhancements
+- CLI help description across all recon commands updated to:
+  `"Target domain, IP address, or full HTTP/HTTPS URL."`
+- `devixon scope create` enhanced with `--allowed-ports` and `--allowed-paths`.
+- `devixon scope show` displays configured `Allowed Ports` and `Allowed Paths`.
 
 ### 5. Test Suite Verification
-- **21 / 21 Tests Passing** in `pytest -v` (including real end-to-end HTTP server crawl and discovery test).
+- **34 / 34 Tests Passing** in `pytest -v` across all test suites:
+  - `tests/unit/test_target.py`: Tests domain-only, IPv4, HTTP with custom port, HTTPS, URL with base path, query strings, invalid URLs, traversal attempts, normalization, and scope enforcement.
+  - `tests/integration/test_dvwa_target_e2e.py`: End-to-end integration test simulating CTFd and DVWA co-hosted on `127.0.0.1` on different ports. Confirms requests reach port 8080, crawl starts at `/DVWA/`, CTFd routes on port 80 never appear in endpoints or live hosts, and report displays exact target URL.
+  - All existing unit, security, crawler, CVSS, database, and report tests pass without regression.
 - **9 / 9 Tests Passing** in `devixon self-test`.

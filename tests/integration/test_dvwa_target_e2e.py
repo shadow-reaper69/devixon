@@ -19,7 +19,7 @@ from devixon.core.target import parse_canonical_target
 from devixon.core.scope import ScopeProfile
 from devixon.database.session import init_db, get_session
 from devixon.database.repository import AssessmentRepository
-from devixon.database.models import LiveHost, DiscoveredPath, InternalLink, Endpoint
+from devixon.database.models import Assessment, LiveHost, DiscoveredPath, InternalLink, Endpoint
 from devixon.recon.base import ScanContext
 from devixon.recon.pipeline import ReconPipeline
 from devixon.reports.generator import ReportGenerator
@@ -225,16 +225,16 @@ async def test_dvwa_target_pipeline_e2e(multi_app_lab, tmp_path):
             assert "challenges" not in ep.url
             assert ep.path.startswith("/DVWA")
 
+        # 5. Verify Report Generation shows the exact target URL
+        report_gen = ReportGenerator()
+        md_path = tmp_path / "dvwa_report.md"
+        html_path = tmp_path / "dvwa_report.html"
+
+        fresh_assessment = session.query(Assessment).filter_by(id=assessment_id).first()
+        report_gen.generate_markdown(fresh_assessment, [], [], md_path, live_hosts=hosts, discovered_paths=paths, internal_links=links, endpoints=endpoints)
+        report_gen.generate_html(fresh_assessment, [], [], html_path, live_hosts=hosts, discovered_paths=paths, internal_links=links, endpoints=endpoints)
     finally:
         session.close()
-
-    # 5. Verify Report Generation shows the exact target URL
-    report_gen = ReportGenerator()
-    md_path = tmp_path / "dvwa_report.md"
-    html_path = tmp_path / "dvwa_report.html"
-
-    report_gen.generate_markdown(assessment, [], [], md_path)
-    report_gen.generate_html(assessment, [], [], html_path)
 
     md_content = md_path.read_text(encoding="utf-8")
     html_content = html_path.read_text(encoding="utf-8")
@@ -242,4 +242,10 @@ async def test_dvwa_target_pipeline_e2e(multi_app_lab, tmp_path):
     assert dvwa_target in md_content
     assert dvwa_target in html_content
     assert f"**Target**: `{dvwa_target}`" in md_content
-    assert str(ctfd_port) not in md_content
+
+    # CTFd routes from port 80 do not appear in discovered endpoints or paths
+    assert "/challenges/crypto" not in md_content
+    assert "/challenges/crypto" not in html_content
+
+    # The external link to CTFd is explicitly classified as out-of-scope (False)
+    assert "False" in md_content

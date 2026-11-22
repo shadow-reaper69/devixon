@@ -43,6 +43,14 @@ from devixon.core.logger import logger
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 
+def _safe_get_rel(obj: Any, attr: str) -> List[Any]:
+    try:
+        val = getattr(obj, attr, [])
+        return val if val is not None else []
+    except Exception:
+        return []
+
+
 class ReportGenerator:
     def __init__(self):
         self.jinja_env = Environment(
@@ -69,16 +77,16 @@ class ReportGenerator:
     ) -> Path:
         template = self.jinja_env.get_template("report.html")
 
-        subdomains = subdomains or getattr(assessment, "subdomains", [])
-        dns_records = dns_records or getattr(assessment, "dns_records", [])
-        live_hosts = live_hosts or getattr(assessment, "live_hosts", [])
-        discovered_paths = discovered_paths or getattr(assessment, "discovered_paths", [])
-        internal_links = internal_links or getattr(assessment, "internal_links", [])
-        endpoints = endpoints or getattr(assessment, "endpoints", [])
-        parameters = parameters or getattr(assessment, "parameters", [])
-        js_assets = js_assets or getattr(assessment, "js_assets", [])
-        technologies = technologies or getattr(assessment, "technologies", [])
-        stages = stages or getattr(assessment, "stages", [])
+        subdomains = subdomains if subdomains is not None else _safe_get_rel(assessment, "subdomains")
+        dns_records = dns_records if dns_records is not None else _safe_get_rel(assessment, "dns_records")
+        live_hosts = live_hosts if live_hosts is not None else _safe_get_rel(assessment, "live_hosts")
+        discovered_paths = discovered_paths if discovered_paths is not None else _safe_get_rel(assessment, "discovered_paths")
+        internal_links = internal_links if internal_links is not None else _safe_get_rel(assessment, "internal_links")
+        endpoints = endpoints if endpoints is not None else _safe_get_rel(assessment, "endpoints")
+        parameters = parameters if parameters is not None else _safe_get_rel(assessment, "parameters")
+        js_assets = js_assets if js_assets is not None else _safe_get_rel(assessment, "js_assets")
+        technologies = technologies if technologies is not None else _safe_get_rel(assessment, "technologies")
+        stages = stages if stages is not None else _safe_get_rel(assessment, "stages")
 
         # Parse scope
         scope_info = {}
@@ -131,16 +139,16 @@ class ReportGenerator:
         technologies: Optional[List[Technology]] = None,
         stages: Optional[List[ScanStage]] = None,
     ) -> Path:
-        subdomains = subdomains or getattr(assessment, "subdomains", [])
-        dns_records = dns_records or getattr(assessment, "dns_records", [])
-        live_hosts = live_hosts or getattr(assessment, "live_hosts", [])
-        discovered_paths = discovered_paths or getattr(assessment, "discovered_paths", [])
-        internal_links = internal_links or getattr(assessment, "internal_links", [])
-        endpoints = endpoints or getattr(assessment, "endpoints", [])
-        parameters = parameters or getattr(assessment, "parameters", [])
-        js_assets = js_assets or getattr(assessment, "js_assets", [])
-        technologies = technologies or getattr(assessment, "technologies", [])
-        stages = stages or getattr(assessment, "stages", [])
+        subdomains = subdomains if subdomains is not None else _safe_get_rel(assessment, "subdomains")
+        dns_records = dns_records if dns_records is not None else _safe_get_rel(assessment, "dns_records")
+        live_hosts = live_hosts if live_hosts is not None else _safe_get_rel(assessment, "live_hosts")
+        discovered_paths = discovered_paths if discovered_paths is not None else _safe_get_rel(assessment, "discovered_paths")
+        internal_links = internal_links if internal_links is not None else _safe_get_rel(assessment, "internal_links")
+        endpoints = endpoints if endpoints is not None else _safe_get_rel(assessment, "endpoints")
+        parameters = parameters if parameters is not None else _safe_get_rel(assessment, "parameters")
+        js_assets = js_assets if js_assets is not None else _safe_get_rel(assessment, "js_assets")
+        technologies = technologies if technologies is not None else _safe_get_rel(assessment, "technologies")
+        stages = stages if stages is not None else _safe_get_rel(assessment, "stages")
 
         scope_info = {}
         try:
@@ -383,7 +391,7 @@ class ReportGenerator:
                     "status": s.resolution_status,
                     "source": s.discovery_source,
                 }
-                for s in getattr(assessment, "subdomains", [])
+                for s in _safe_get_rel(assessment, "subdomains")
             ],
             "live_hosts": [
                 {
@@ -393,7 +401,7 @@ class ReportGenerator:
                     "title": lh.title,
                     "response_time_ms": lh.response_time_ms,
                 }
-                for lh in getattr(assessment, "live_hosts", [])
+                for lh in _safe_get_rel(assessment, "live_hosts")
             ],
             "discovered_paths": [
                 {
@@ -402,7 +410,7 @@ class ReportGenerator:
                     "content_length": dp.content_length,
                     "redirect_location": dp.redirect_location,
                 }
-                for dp in getattr(assessment, "discovered_paths", [])
+                for dp in _safe_get_rel(assessment, "discovered_paths")
             ],
             "findings": [
                 {
