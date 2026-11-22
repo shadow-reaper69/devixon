@@ -1,5 +1,6 @@
 """
 CLI Assets and Endpoints Management Commands.
+Displays real data from Asset, Subdomain, LiveHost, InternalLink, Endpoint, and Parameter models.
 """
 
 import json
@@ -10,13 +11,13 @@ import typer
 from rich.console import Console
 from rich.table import Table
 from devixon.database.session import get_session
-from devixon.database.models import Asset, Endpoint, Assessment
+from devixon.database.models import Asset, Subdomain, LiveHost, Endpoint, Parameter, Assessment
 
 console = Console()
 
 
 def list_assets():
-    """List discovered assets and resolved IP addresses."""
+    """List discovered assets, subdomains, and live hosts."""
     session = get_session()
     try:
         latest = session.query(Assessment).order_by(Assessment.created_at.desc()).first()
@@ -24,50 +25,66 @@ def list_assets():
             console.print("[yellow]No assessments found.[/yellow]")
             return
 
-        assets = session.query(Asset).filter(Asset.assessment_id == latest.id).all()
-        table = Table(title=f"Discovered Assets ({latest.target})", show_header=True, header_style="bold green")
-        table.add_column("Hostname", style="bold cyan")
-        table.add_column("IP Address", style="white")
-        table.add_column("Type", style="dim")
-        table.add_column("Scope Status", style="green")
+        subdomains = session.query(Subdomain).filter(Subdomain.assessment_id == latest.id).all()
+        live_hosts = session.query(LiveHost).filter(LiveHost.assessment_id == latest.id).all()
+
+        table = Table(title=f"Discovered Subdomains & Hosts ({latest.target})", show_header=True, header_style="bold green")
+        table.add_column("Subdomain / Host", style="bold cyan")
+        table.add_column("Resolved IP", style="white")
+        table.add_column("Resolution Status", style="dim")
+        table.add_column("HTTP Live Status", style="green")
         table.add_column("Source", style="dim")
 
-        for a in assets:
+        live_map = {lh.host: lh for lh in live_hosts}
+
+        for s in subdomains:
+            lh = live_map.get(s.subdomain)
+            http_status = f"HTTP {lh.status_code} ({lh.title or 'OK'})" if lh else "No Web Service"
             table.add_row(
-                a.hostname,
-                a.ip_address or "Unresolved",
-                a.asset_type,
-                a.scope_status,
-                a.discovery_source,
+                s.subdomain,
+                s.resolved_ip or "Unresolved",
+                s.resolution_status,
+                http_status,
+                s.discovery_source,
             )
 
         console.print("\n")
         console.print(table)
-        console.print(f"\nTotal: {len(assets)} assets\n")
+        console.print(f"\nTotal: {len(subdomains)} subdomains ({len(live_hosts)} live HTTP hosts)\n")
     finally:
         session.close()
 
 
 def inspect_asset(hostname: str = typer.Argument(..., help="Asset hostname to inspect")):
-    """Inspect an asset and its associated services, endpoints, and findings."""
+    """Inspect an asset and its associated services, technologies, live hosts, and findings."""
     session = get_session()
     try:
+        latest = session.query(Assessment).order_by(Assessment.created_at.desc()).first()
+        if not latest:
+            console.print("[yellow]No assessments found.[/yellow]")
+            return
+
+        sub = session.query(Subdomain).filter(Subdomain.subdomain == hostname).first()
+        live = session.query(LiveHost).filter(LiveHost.host == hostname).first()
         asset = session.query(Asset).filter(Asset.hostname == hostname).first()
-        if not asset:
+
+        if not sub and not live and not asset:
             console.print(f"[red]Asset '{hostname}' not found.[/red]")
             return
 
-        console.print(f"\n[bold cyan]ASSET DETAILS: {asset.hostname}[/bold cyan]")
-        console.print(f"IP: {asset.ip_address or 'Unresolved'} | Type: {asset.asset_type} | Scope: {asset.scope_status}")
-        console.print(f"Discovery Source: {asset.discovery_source}")
+        console.print(f"\n[bold cyan]ASSET RECONNAISSANCE INTELLIGENCE: {hostname}[/bold cyan]")
+        resolved_ip = (sub.resolved_ip if sub else None) or (asset.ip_address if asset else None) or "Unresolved"
+        res_status = sub.resolution_status if sub else "UNKNOWN"
+        console.print(f"IP: [bold]{resolved_ip}[/bold] | DNS Status: {res_status}")
 
-        if asset.services:
-            console.print("\n[bold]Services / Open Ports:[/bold]")
-            for s in asset.services:
-                console.print(f"  - Port {s.port}/{s.protocol} ({s.service_name}) [Confidence: {s.confidence}]")
+        if live:
+            console.print(f"Live URL: {live.url} | Status: HTTP {live.status_code} | Server: {live.web_server or 'Unknown'}")
+            console.print(f"Page Title: {live.title or 'None'} | Response Time: {live.response_time_ms} ms")
+            if live.technologies_json:
+                console.print(f"Technologies: {live.technologies_json}")
 
-        if asset.findings:
-            console.print(f"\n[bold red]Associated Findings ({len(asset.findings)}):[/bold red]")
+        if asset and asset.findings:
+            console.print(f"\n[bold red]Associated Security Findings ({len(asset.findings)}):[/bold red]")
             for f in asset.findings:
                 console.print(f"  - [{f.severity}] {f.title} ({f.verification_status})")
         console.print("")
@@ -86,25 +103,24 @@ def export_assets(
             console.print("[yellow]No assessments found to export.[/yellow]")
             return
 
-        assets = session.query(Asset).filter(Asset.assessment_id == latest.id).all()
+        subdomains = session.query(Subdomain).filter(Subdomain.assessment_id == latest.id).all()
         out.parent.mkdir(parents=True, exist_ok=True)
 
         if out.suffix.lower() == ".csv":
             with open(out, "w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
-                writer.writerow(["Hostname", "IP", "Type", "Scope", "Source"])
-                for a in assets:
-                    writer.writerow([a.hostname, a.ip_address or "", a.asset_type, a.scope_status, a.discovery_source])
+                writer.writerow(["Subdomain", "Resolved_IP", "Status", "Source"])
+                for s in subdomains:
+                    writer.writerow([s.subdomain, s.resolved_ip or "", s.resolution_status, s.discovery_source])
         else:
             data = [
                 {
-                    "hostname": a.hostname,
-                    "ip_address": a.ip_address,
-                    "asset_type": a.asset_type,
-                    "scope_status": a.scope_status,
-                    "discovery_source": a.discovery_source,
+                    "subdomain": s.subdomain,
+                    "resolved_ip": s.resolved_ip,
+                    "resolution_status": s.resolution_status,
+                    "discovery_source": s.discovery_source,
                 }
-                for a in assets
+                for s in subdomains
             ]
             out.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
@@ -122,25 +138,21 @@ def list_endpoints():
             console.print("[yellow]No assessments found.[/yellow]")
             return
 
-        endpoints = (
-            session.query(Endpoint)
-            .join(Asset)
-            .filter(Asset.assessment_id == latest.id)
-            .all()
-        )
+        endpoints = session.query(Endpoint).filter(Endpoint.assessment_id == latest.id).all()
 
         table = Table(title=f"Discovered Endpoints ({latest.target})", show_header=True, header_style="bold green")
         table.add_column("Method", style="bold")
         table.add_column("Path", style="cyan")
         table.add_column("Parameters", style="yellow")
-        table.add_column("Status Code", style="dim")
+        table.add_column("Origin", style="dim")
 
-        for ep in endpoints[:50]:
+        for ep in endpoints[:60]:
+            origin = "[dim]Historical[/dim]" if ep.is_historical else "[green]Crawl[/green]"
             table.add_row(
                 ep.method,
                 ep.path,
                 ep.params or "-",
-                str(ep.status_code or "-"),
+                origin,
             )
 
         console.print("\n")
@@ -162,8 +174,15 @@ def inspect_endpoint(endpoint_id: str = typer.Argument(..., help="Endpoint ID or
             return
 
         console.print(f"\n[bold cyan]ENDPOINT DETAILS: {ep.url}[/bold cyan]")
-        console.print(f"Path: {ep.path} | Method: {ep.method} | Status: {ep.status_code or 'Unknown'}")
-        console.print(f"Parameters: {ep.params or 'None'} | Content-Type: {ep.content_type or 'Unknown'}\n")
+        console.print(f"Path: {ep.path} | Method: {ep.method} | Historical: {ep.is_historical}")
+        console.print(f"Discovery Source: {ep.discovery_source}")
+
+        params = session.query(Parameter).filter(Parameter.endpoint_id == ep.id).all()
+        if params:
+            console.print("\n[bold]Parameters:[/bold]")
+            for p in params:
+                console.print(f"  - {p.name} ({p.param_type}) [Example: {p.example_value or '-'}]")
+        console.print("")
     finally:
         session.close()
 
@@ -179,20 +198,15 @@ def export_endpoints(
             console.print("[yellow]No assessments found to export.[/yellow]")
             return
 
-        endpoints = (
-            session.query(Endpoint)
-            .join(Asset)
-            .filter(Asset.assessment_id == latest.id)
-            .all()
-        )
+        endpoints = session.query(Endpoint).filter(Endpoint.assessment_id == latest.id).all()
         out.parent.mkdir(parents=True, exist_ok=True)
 
         if out.suffix.lower() == ".csv":
             with open(out, "w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
-                writer.writerow(["URL", "Path", "Method", "Params", "Status"])
+                writer.writerow(["URL", "Path", "Method", "Params", "Historical", "Source"])
                 for ep in endpoints:
-                    writer.writerow([ep.url, ep.path, ep.method, ep.params or "", ep.status_code or ""])
+                    writer.writerow([ep.url, ep.path, ep.method, ep.params or "", ep.is_historical, ep.discovery_source])
         else:
             data = [
                 {
@@ -200,7 +214,8 @@ def export_endpoints(
                     "path": ep.path,
                     "method": ep.method,
                     "params": ep.params,
-                    "status_code": ep.status_code,
+                    "is_historical": ep.is_historical,
+                    "discovery_source": ep.discovery_source,
                 }
                 for ep in endpoints
             ]

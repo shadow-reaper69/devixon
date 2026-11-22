@@ -1,9 +1,10 @@
 """
 Database session and engine initialization using SQLAlchemy 2.0.
+Includes automatic schema migration for SQLite databases.
 """
 
 from pathlib import Path
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from devixon.core.config import load_config, DEFAULT_DATA_DIR
 
@@ -43,7 +44,27 @@ def get_session(db_path: str = None) -> Session:
     return _SessionFactory()
 
 
+def run_migrations(engine):
+    """
+    Ensures existing SQLite tables are migrated with any newly added columns.
+    Safe and idempotent.
+    """
+    with engine.connect() as conn:
+        # Check endpoints table columns
+        try:
+            res = conn.execute(text("PRAGMA table_info(endpoints)")).fetchall()
+            existing_cols = {row[1] for row in res}
+            if existing_cols and "assessment_id" not in existing_cols:
+                conn.execute(text("ALTER TABLE endpoints ADD COLUMN assessment_id VARCHAR(36) REFERENCES assessments(id) ON DELETE CASCADE"))
+            if existing_cols and "is_historical" not in existing_cols:
+                conn.execute(text("ALTER TABLE endpoints ADD COLUMN is_historical BOOLEAN DEFAULT 0"))
+            conn.commit()
+        except Exception:
+            pass
+
+
 def init_db(db_path: str = None):
-    """Creates all tables."""
+    """Creates all tables and runs schema migrations."""
     engine = get_engine(db_path)
     Base.metadata.create_all(bind=engine)
+    run_migrations(engine)

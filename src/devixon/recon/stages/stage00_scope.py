@@ -13,9 +13,9 @@ class Stage00ScopeValidation(BaseStage):
     name = "Scope & Authorization Validation"
 
     async def execute(self, ctx: ScanContext) -> None:
+        orig_target = ctx.target
         # 1. Target normalization
         norm_target = normalize_target(ctx.target)
-        ctx.target = norm_target
 
         # 2. Scope validation
         is_allowed, reason = ctx.scope_profile.is_in_scope(norm_target)
@@ -25,5 +25,10 @@ class Stage00ScopeValidation(BaseStage):
         # 3. Authorization check if scan is active
         if ctx.scan_profile != "PASSIVE":
             ctx.scope_profile.validate_authorization()
+
+        ctx.target = norm_target
+        if ":" in orig_target:
+            ctx.discovered_subdomains.add(orig_target)
+        ctx.discovered_subdomains.add(norm_target)
 
         logger.info(f"Target '{norm_target}' scope and authorization verified: {reason}")

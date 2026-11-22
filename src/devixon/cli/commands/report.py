@@ -10,7 +10,21 @@ from rich.console import Console
 from rich.table import Table
 from devixon.core.config import load_config
 from devixon.database.session import get_session
-from devixon.database.models import Assessment, Finding, Asset
+from devixon.database.models import (
+    Assessment,
+    Finding,
+    Asset,
+    Subdomain,
+    DNSRecord,
+    LiveHost,
+    DiscoveredPath,
+    InternalLink,
+    Endpoint,
+    Parameter,
+    JavaScriptAsset,
+    Technology,
+    ScanStage,
+)
 from devixon.reports.generator import ReportGenerator
 
 console = Console()
@@ -38,6 +52,16 @@ def generate_report(
 
         findings = session.query(Finding).filter(Finding.assessment_id == assessment.id).all()
         assets = session.query(Asset).filter(Asset.assessment_id == assessment.id).all()
+        subdomains = session.query(Subdomain).filter(Subdomain.assessment_id == assessment.id).all()
+        dns_records = session.query(DNSRecord).filter(DNSRecord.assessment_id == assessment.id).all()
+        live_hosts = session.query(LiveHost).filter(LiveHost.assessment_id == assessment.id).all()
+        discovered_paths = session.query(DiscoveredPath).filter(DiscoveredPath.assessment_id == assessment.id).all()
+        internal_links = session.query(InternalLink).filter(InternalLink.assessment_id == assessment.id).all()
+        endpoints = session.query(Endpoint).filter(Endpoint.assessment_id == assessment.id).all()
+        parameters = session.query(Parameter).filter(Parameter.assessment_id == assessment.id).all()
+        js_assets = session.query(JavaScriptAsset).filter(JavaScriptAsset.assessment_id == assessment.id).all()
+        technologies = session.query(Technology).filter(Technology.assessment_id == assessment.id).all()
+        stages = session.query(ScanStage).filter(ScanStage.assessment_id == assessment.id).all()
 
         generator = ReportGenerator()
         base_name = f"devixon_{assessment.target.replace('.', '_')}_{assessment.id[:8]}"
@@ -46,11 +70,41 @@ def generate_report(
 
         fmt = format_type.lower()
         if fmt in ("all", "html"):
-            p = generator.generate_html(assessment, findings, assets, reports_dir / f"{base_name}.html")
+            p = generator.generate_html(
+                assessment=assessment,
+                findings=findings,
+                assets=assets,
+                output_path=reports_dir / f"{base_name}.html",
+                subdomains=subdomains,
+                dns_records=dns_records,
+                live_hosts=live_hosts,
+                discovered_paths=discovered_paths,
+                internal_links=internal_links,
+                endpoints=endpoints,
+                parameters=parameters,
+                js_assets=js_assets,
+                technologies=technologies,
+                stages=stages,
+            )
             console.print(f"[green]HTML Report:[/green] {p}")
 
         if fmt in ("all", "markdown", "md"):
-            p = generator.generate_markdown(assessment, findings, assets, reports_dir / f"{base_name}.md")
+            p = generator.generate_markdown(
+                assessment=assessment,
+                findings=findings,
+                assets=assets,
+                output_path=reports_dir / f"{base_name}.md",
+                subdomains=subdomains,
+                dns_records=dns_records,
+                live_hosts=live_hosts,
+                discovered_paths=discovered_paths,
+                internal_links=internal_links,
+                endpoints=endpoints,
+                parameters=parameters,
+                js_assets=js_assets,
+                technologies=technologies,
+                stages=stages,
+            )
             console.print(f"[green]Markdown Report:[/green] {p}")
 
         if fmt in ("all", "json"):

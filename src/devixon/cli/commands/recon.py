@@ -1,5 +1,6 @@
 """
 CLI Reconnaissance Commands.
+Includes subdomains, hosts, crawl, paths, urls, endpoints, full, quick, passive, status, resume, and cancel.
 """
 
 import asyncio
@@ -34,8 +35,8 @@ def _load_scope(name: str, target: str) -> ScopeProfile:
 
 
 def run_recon(
-    target: str = typer.Option(..., "--target", "-t", help="Target domain or IP to assess."),
-    scope_name: str = typer.Option("default", "--scope", "-s", help="Scope profile name."),
+    target: str,
+    scope_name: str = "default",
     profile: str = "QUICK",
 ):
     """Internal helper to execute a reconnaissance pipeline asynchronously."""
@@ -77,6 +78,54 @@ def run_recon(
     except Exception as e:
         console.print(f"\n[bold red]Assessment stopped with error:[/bold red] {e}\n")
         raise typer.Exit(1)
+
+
+def subdomains(
+    target: str = typer.Option(..., "--target", "-t", help="Target domain."),
+    scope_name: str = typer.Option("default", "--scope", "-s", help="Scope profile name."),
+):
+    """Run subdomain discovery and DNS enumeration only."""
+    run_recon(target=target, scope_name=scope_name, profile="SUBDOMAINS")
+
+
+def hosts(
+    target: str = typer.Option(..., "--target", "-t", help="Target domain or host."),
+    scope_name: str = typer.Option("default", "--scope", "-s", help="Scope profile name."),
+):
+    """Run live HTTP/HTTPS host and service discovery only."""
+    run_recon(target=target, scope_name=scope_name, profile="HOSTS")
+
+
+def crawl(
+    target: str = typer.Option(..., "--target", "-t", help="Target domain or host."),
+    scope_name: str = typer.Option("default", "--scope", "-s", help="Scope profile name."),
+):
+    """Run scope-governed web link crawler."""
+    run_recon(target=target, scope_name=scope_name, profile="CRAWL")
+
+
+def paths(
+    target: str = typer.Option(..., "--target", "-t", help="Target domain or host."),
+    scope_name: str = typer.Option("default", "--scope", "-s", help="Scope profile name."),
+):
+    """Run safe directory and file path discovery."""
+    run_recon(target=target, scope_name=scope_name, profile="PATHS")
+
+
+def urls(
+    target: str = typer.Option(..., "--target", "-t", help="Target domain or host."),
+    scope_name: str = typer.Option("default", "--scope", "-s", help="Scope profile name."),
+):
+    """Run historical URL intelligence from archives."""
+    run_recon(target=target, scope_name=scope_name, profile="URLS")
+
+
+def endpoints(
+    target: str = typer.Option(..., "--target", "-t", help="Target domain or host."),
+    scope_name: str = typer.Option("default", "--scope", "-s", help="Scope profile name."),
+):
+    """Run endpoint, API, and parameter extraction."""
+    run_recon(target=target, scope_name=scope_name, profile="ENDPOINTS")
 
 
 def passive(
@@ -155,7 +204,6 @@ def recon_resume(
             console.print(f"[red]Assessment '{assessment_id}' not found.[/red]")
             return
         console.print(f"[green]Resuming assessment {assessment_id} for {assessment.target}...[/green]")
-        # Execute pipeline
         scope = ScopeProfile.model_validate_json(assessment.scope_profile_json)
         ctx = ScanContext(
             assessment_id=assessment.id,

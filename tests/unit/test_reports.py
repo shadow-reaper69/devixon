@@ -1,10 +1,23 @@
 """
 Unit tests for Multi-Format Report Generator.
+Verifies rendering of all 15 intelligence sections in HTML and Markdown.
 """
 
 from pathlib import Path
 from datetime import datetime, timezone
-from devixon.database.models import Assessment, Finding, Asset, Evidence
+from devixon.database.models import (
+    Assessment,
+    Finding,
+    Asset,
+    Evidence,
+    Subdomain,
+    LiveHost,
+    DiscoveredPath,
+    InternalLink,
+    Endpoint,
+    Parameter,
+    Technology,
+)
 from devixon.reports.generator import ReportGenerator
 
 
@@ -13,10 +26,12 @@ def test_report_generation_all_formats(tmp_path: Path):
     assessment = Assessment(
         id="test-ass-1234",
         target="example.com",
-        scan_profile="QUICK",
+        scope_profile_json='{"primary_domain": "example.com", "authorized_by_user": true}',
+        scan_profile="FULL",
         status="COMPLETED",
         start_time=datetime.now(timezone.utc),
         end_time=datetime.now(timezone.utc),
+        created_at=datetime.now(timezone.utc),
     )
     asset = Asset(
         hostname="api.example.com",
@@ -24,6 +39,55 @@ def test_report_generation_all_formats(tmp_path: Path):
         asset_type="SUBDOMAIN",
         scope_status="IN_SCOPE",
         discovery_source="TEST",
+    )
+    sub = Subdomain(
+        assessment_id=assessment.id,
+        subdomain="api.example.com",
+        resolved_ip="93.184.216.34",
+        resolution_status="RESOLVED",
+        discovery_source="SUBFINDER",
+    )
+    lh = LiveHost(
+        assessment_id=assessment.id,
+        url="https://api.example.com",
+        host="api.example.com",
+        status_code=200,
+        title="API Gateway",
+        web_server="nginx/1.24",
+        response_time_ms=45.2,
+    )
+    dp = DiscoveredPath(
+        assessment_id=assessment.id,
+        host="api.example.com",
+        url="https://api.example.com/api/v1",
+        path="/api/v1",
+        status_code=200,
+        content_length=150,
+        discovery_tool="FFUF",
+    )
+    link = InternalLink(
+        assessment_id=assessment.id,
+        source_url="https://api.example.com",
+        destination_url="https://api.example.com/docs",
+        method="GET",
+        link_type="a_href",
+        is_internal=True,
+        crawl_depth=1,
+    )
+    ep = Endpoint(
+        assessment_id=assessment.id,
+        url="https://api.example.com/users",
+        path="/users",
+        method="GET",
+        params="id,page",
+        is_historical=False,
+    )
+    param = Parameter(
+        assessment_id=assessment.id,
+        endpoint_id=ep.id,
+        name="id",
+        param_type="query",
+        example_value="101",
     )
     finding = Finding(
         id="find-5678",
@@ -49,16 +113,52 @@ def test_report_generation_all_formats(tmp_path: Path):
 
     # 1. HTML
     html_path = tmp_path / "report.html"
-    generator.generate_html(assessment, [finding], [asset], html_path)
+    generator.generate_html(
+        assessment=assessment,
+        findings=[finding],
+        assets=[asset],
+        output_path=html_path,
+        subdomains=[sub],
+        live_hosts=[lh],
+        discovered_paths=[dp],
+        internal_links=[link],
+        endpoints=[ep],
+        parameters=[param],
+    )
     assert html_path.exists()
-    assert "DEVIXON" in html_path.read_text(encoding="utf-8")
-    assert "Missing HSTS Header" in html_path.read_text(encoding="utf-8")
+    html_txt = html_path.read_text(encoding="utf-8")
+    assert "DEVIXON" in html_txt
+    assert "Missing HSTS Header" in html_txt
+    assert "api.example.com" in html_txt
+    assert "/api/v1" in html_txt
+    assert "Executive Summary" in html_txt
+    assert "Scope Information" in html_txt
+    assert "Subdomain Inventory" in html_txt
+    assert "Live Hosts" in html_txt
+    assert "Discovered Directories and Files" in html_txt
 
     # 2. Markdown
     md_path = tmp_path / "report.md"
-    generator.generate_markdown(assessment, [finding], [asset], md_path)
+    generator.generate_markdown(
+        assessment=assessment,
+        findings=[finding],
+        assets=[asset],
+        output_path=md_path,
+        subdomains=[sub],
+        live_hosts=[lh],
+        discovered_paths=[dp],
+        internal_links=[link],
+        endpoints=[ep],
+        parameters=[param],
+    )
     assert md_path.exists()
-    assert "# Security Assessment Report" in md_path.read_text(encoding="utf-8")
+    md_txt = md_path.read_text(encoding="utf-8")
+    assert "DEVIXON" in md_txt
+    assert "## 1. Executive Summary" in md_txt
+    assert "## 2. Scope Information" in md_txt
+    assert "## 3. Subdomain Inventory" in md_txt
+    assert "## 5. Live Hosts" in md_txt
+    assert "## 7. Discovered Directories and Files" in md_txt
 
     # 3. JSON
     json_path = tmp_path / "report.json"

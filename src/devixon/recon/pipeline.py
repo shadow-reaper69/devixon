@@ -59,7 +59,19 @@ class ReconPipeline:
 
     def _resolve_stages(self, profile: str) -> List[BaseStage]:
         profile = profile.upper()
-        if profile == "PASSIVE":
+        if profile == "SUBDOMAINS":
+            allowed_ids = {"STAGE_00", "STAGE_01", "STAGE_02", "STAGE_03", "STAGE_04", "STAGE_17"}
+        elif profile == "HOSTS":
+            allowed_ids = {"STAGE_00", "STAGE_05", "STAGE_06", "STAGE_07", "STAGE_17"}
+        elif profile == "CRAWL":
+            allowed_ids = {"STAGE_00", "STAGE_05", "STAGE_09", "STAGE_17"}
+        elif profile == "PATHS":
+            allowed_ids = {"STAGE_00", "STAGE_05", "STAGE_13", "STAGE_17"}
+        elif profile == "URLS":
+            allowed_ids = {"STAGE_00", "STAGE_08", "STAGE_10", "STAGE_17"}
+        elif profile == "ENDPOINTS":
+            allowed_ids = {"STAGE_00", "STAGE_05", "STAGE_08", "STAGE_09", "STAGE_10", "STAGE_11", "STAGE_12", "STAGE_17"}
+        elif profile == "PASSIVE":
             allowed_ids = {
                 "STAGE_00", "STAGE_01", "STAGE_02", "STAGE_03", "STAGE_04",
                 "STAGE_08", "STAGE_15", "STAGE_16", "STAGE_17"

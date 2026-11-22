@@ -35,8 +35,8 @@ def normalize_target(target: str) -> str:
         target = target.split(":")[0]
 
     target = target.strip().lower()
-    # Check valid characters
-    if not re.match(r"^[a-zA-Z0-9_\-\.\:]+$", target):
+    # Check valid characters (allow leading wildcard *. for domain rules)
+    if not re.match(r"^(\*\.)?[a-zA-Z0-9_\-\.\:]+$", target):
         raise TargetValidationError(f"Target contains invalid characters: {target}")
 
     return target
@@ -97,33 +97,36 @@ class ScopeProfile(BaseModel):
         except ValueError:
             is_ip = False
 
+        norm_primary = normalize_target(self.primary_domain)
+
         if is_ip:
             # Check against allowed IPs and CIDRs
             for allowed_ip_spec in self.allowed_ips:
                 try:
-                    if "/" in allowed_ip_spec:
-                        network = ipaddress.ip_network(allowed_ip_spec, strict=False)
+                    clean_allowed_ip = normalize_target(allowed_ip_spec) if "/" not in allowed_ip_spec else allowed_ip_spec
+                    if "/" in clean_allowed_ip:
+                        network = ipaddress.ip_network(clean_allowed_ip, strict=False)
                         if ip_obj in network:
-                            return True, f"IP '{clean_host}' is within allowed network '{allowed_ip_spec}'."
+                            return True, f"IP '{clean_host}' is within allowed network '{clean_allowed_ip}'."
                     else:
-                        allowed_single = ipaddress.ip_address(allowed_ip_spec)
+                        allowed_single = ipaddress.ip_address(clean_allowed_ip)
                         if ip_obj == allowed_single:
-                            return True, f"IP '{clean_host}' matches allowed IP '{allowed_ip_spec}'."
+                            return True, f"IP '{clean_host}' matches allowed IP '{clean_allowed_ip}'."
                 except ValueError:
                     continue
             # If primary domain is this IP
-            if clean_host == self.primary_domain:
+            if clean_host == norm_primary:
                 return True, f"IP matches primary target."
             return False, f"IP '{clean_host}' is not in allowed IP list or networks."
 
         # 4. Target is a domain/hostname
         # Check against primary domain
-        clean_primary = self.primary_domain.lower()
+        clean_primary = norm_primary
         if clean_host == clean_primary:
             return True, f"Hostname matches primary domain '{clean_primary}'."
 
         # Check allowed domains list
-        candidates = [clean_primary] + [d.lower() for d in self.allowed_domains]
+        candidates = [clean_primary] + [d.lower().strip() for d in self.allowed_domains]
         for pattern in candidates:
             if pattern.startswith("*."):
                 root = pattern[2:]

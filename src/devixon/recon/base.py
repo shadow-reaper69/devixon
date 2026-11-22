@@ -4,7 +4,7 @@ Base classes for DEVIXON Reconnaissance Pipeline Stages and Context.
 
 import asyncio
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Set
 from pydantic import BaseModel, Field
 from devixon.core.scope import ScopeProfile
 from devixon.core.exceptions import DevixonError, ScanCancelledError
@@ -29,17 +29,23 @@ class ScanContext:
         self.is_cancelled = False
 
         # Working data shared between stages
-        self.discovered_subdomains: set[str] = {target}
+        self.discovered_subdomains: Set[str] = {target}
+        self.subdomain_records: Dict[str, Dict[str, Any]] = {}  # sub -> {resolved_ip, status, source, records}
         self.dns_records: Dict[str, Dict[str, List[str]]] = {}  # host -> {record_type: [values]}
         self.live_hosts: Dict[str, Dict[str, Any]] = {}  # url -> info
         self.open_ports: Dict[str, List[int]] = {}  # host -> [ports]
         self.technologies: Dict[str, List[str]] = {}  # host -> [tech]
-        self.discovered_urls: set[str] = set()
+        self.discovered_urls: Set[str] = set()
+        self.discovered_paths: List[Dict[str, Any]] = []
+        self.internal_links: List[Dict[str, Any]] = []
         self.endpoints: List[Dict[str, Any]] = []
+        self.parameters: List[Dict[str, Any]] = []
         self.js_findings: List[Dict[str, Any]] = []
+        self.js_assets: List[Dict[str, Any]] = []
         self.api_endpoints: List[str] = []
         self.posture_findings: List[Dict[str, Any]] = []
         self.stage_timings: Dict[str, float] = {}
+        self.scan_errors: List[Dict[str, Any]] = []
 
     def check_cancelled(self):
         if self.is_cancelled:
@@ -93,6 +99,15 @@ class BaseStage:
             duration = asyncio.get_event_loop().time() - start_time
             db_stage.duration = duration
             db_stage.end_time = datetime.now(timezone.utc)
+            err_dict = {
+                "stage": self.stage_id,
+                "name": self.name,
+                "error": de.message,
+                "recoverable": de.recoverable,
+                "suggested_action": de.suggested_action,
+            }
+            ctx.scan_errors.append(err_dict)
+
             if de.recoverable:
                 db_stage.status = "SKIPPED"
                 db_stage.error_message = f"{de.message} (Action: {de.suggested_action or 'Continuing with native fallback'})"
@@ -112,6 +127,12 @@ class BaseStage:
             db_stage.end_time = datetime.now(timezone.utc)
             db_stage.error_message = str(e)
             session.commit()
+            ctx.scan_errors.append({
+                "stage": self.stage_id,
+                "name": self.name,
+                "error": str(e),
+                "recoverable": False,
+            })
             logger.error(f"[{self.stage_id}] Unexpected error: {str(e)}", exc_info=True)
             raise
         finally:

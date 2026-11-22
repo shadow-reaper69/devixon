@@ -1,41 +1,60 @@
 # DEVIXON — HANDOFF STATUS & ROADMAP
 
-## Current State: Complete & Verified
+## Current State: Reconnaissance Engine Upgrade Complete & Verified
 
-### 1. Architectural Foundation
-- **Packaging**: Standard `pyproject.toml` configuration with console entrypoint `devixon = "devixon.cli.main:app"`.
-- **Scope Engine**: `devixon.core.scope.ScopeProfile` strictly validates wildcards (`*.example.com`), exact hostnames, CIDR ranges, excluded paths, and mandatory user authorization gates before any active probe.
-- **Typed Exceptions**: 17 domain-specific exceptions inheriting from `DevixonError`, providing error codes, technical details, recoverability, and remediation recommendations.
-- **Resilient Process Runner**: `devixon.core.runner.run_subprocess` executes external processes without `shell=True`, enforcing strict argument sanitization, timeouts, output bounds, and child process tree termination.
-- **Database**: SQLite with SQLAlchemy 2.0 ORM models (`Assessment`, `Asset`, `Service`, `Endpoint`, `Finding`, `Evidence`, `ScanStage`) with foreign keys and indexes.
+### 1. Architectural Upgrades & Database Models
+- **Database Models Added**:
+  - `Subdomain`: Explicit `NOT_APPLICABLE` support for localhost / IP targets, DNS records JSON, resolved IP, resolution status, discovery source.
+  - `DNSRecord`: Host, record type (`A`, `AAAA`, `CNAME`, `MX`, `TXT`, `NS`), resolved values, TTL.
+  - `LiveHost`: Discovered HTTP/HTTPS hosts, status code, title, web server, detected technologies, content type, response time (ms), redirect destination.
+  - `DiscoveredPath`: Wordlist fuzzing and discovery files, status codes, content lengths, redirect locations, response times, discovery tool (`FFUF` / native).
+  - `InternalLink`: Crawler links, source and destination URLs, method, link type (`a_href`, `form_action`, `script_src`), internal/external classification, crawl depth.
+  - `Endpoint`: URLs, paths, methods, historical vs live distinction (`is_historical`), discovery source.
+  - `Parameter`: Discovered query and body parameters, endpoint mapping, example values.
+  - `JavaScriptAsset`: JavaScript file URLs, discovered routes/endpoints, source map links, and strictly masked/sanitized secret patterns.
+  - `Technology`: Fingerprinted software, servers, frameworks, CMS, and libraries with confidence ratings.
+- **SQLite Migrations**: Automatic schema migration in `init_db()` ensures columns (`assessment_id`, `is_historical`, etc.) are seamlessly added without data loss.
 
-### 2. Reconnaissance Pipeline
-- **18-Stage Modular Architecture**:
-  - `STAGE_00`: Scope & Authorization Validation
-  - `STAGE_01`: Passive OSINT (crt.sh Certificate Transparency)
-  - `STAGE_02`: Subdomain Discovery (Subfinder adapter + native fallback)
-  - `STAGE_03`: DNS Intelligence (A, AAAA, CNAME, MX, TXT via dnspython)
-  - `STAGE_04`: Asset Correlation & Inventory
-  - `STAGE_05`: Live Host Discovery (httpx prober + headers & title extraction)
-  - `STAGE_06`: Service Discovery (safe top web/infra ports)
-  - `STAGE_07`: Technology Fingerprinting (Wappalyzer-like headers/meta heuristics)
-  - `STAGE_08`: URL Intelligence (Web archive querying)
-  - `STAGE_09`: Web Crawling (Scope-governed crawler with depth and count bounds)
-  - `STAGE_10`: Endpoint & Parameter Extraction
-  - `STAGE_11`: JavaScript Intelligence (Scoped JS analysis, route discovery, masked secret detection)
-  - `STAGE_12`: API Reconnaissance (OpenAPI, Swagger, GraphQL endpoint checks)
-  - `STAGE_13`: Content & Sensitive File Discovery (`robots.txt`, `security.txt`, `.git/HEAD`, `.env`)
-  - `STAGE_14`: Security Posture Checks (HSTS, CSP, X-Content-Type-Options, CORS)
-  - `STAGE_15`: Evidence Normalization & Finding Persistence (SHA256 evidence hashing)
-  - `STAGE_16`: AI Security Analysis (Provider-independent, offline fallback, prompt injection quarantine)
-  - `STAGE_17`: Final Report Generation (HTML, Markdown, JSON, CSV)
+### 2. Reconnaissance Pipeline Enhancements
+- **Subdomain Enumeration**: Integrated `subfinder`, `amass`, `dnsx` adapters + native crt.sh and dnspython fallback. Localhost/IP targets are explicitly tagged `NOT_APPLICABLE`.
+- **Live Host Discovery**: Integrated ProjectDiscovery `httpx` + native async httpx client prober collecting response times, redirects, titles, servers, and technologies.
+- **Directory and File Discovery**: Integrated `ffuf` + native safe wordlist path discoverer recording status codes, content lengths, redirects, and execution metrics.
+- **Internal Link Crawling**: Integrated `katana` + native async HTML/JS crawler recording real links, methods, link types, depths, and internal/external flags.
+- **URL & Endpoint Intelligence**: Integrated `gau`, `waybackurls`, and `katana` with clear separation of historical archive URLs from live endpoints.
+- **JavaScript Intelligence**: Extracts client-side routes, API paths, source maps, and applies strict masking to discovered secrets.
+- **API Discovery**: Automatically identifies OpenAPI/Swagger documentation, GraphQL endpoints, and REST schema routes.
 
-### 3. Finding Validation & Security
-- **Multi-State Verification**: `CONFIRMED`, `LIKELY`, `NEEDS_REVIEW`, `INFORMATIONAL`, `FALSE_POSITIVE`, `FIXED`.
-- **Manual Verification Checklists**: Dedicated guides for XSS, SQLi, SSRF, IDOR, Auth Flaws, and Misconfigurations.
-- **Deterministic CVSS v3.1 Calculator**: Pure algorithmic calculation without hallucination.
+### 3. Expanded CLI Suite
+- `devixon recon subdomains` — Subdomain enumeration and DNS resolution only.
+- `devixon recon hosts` — Live HTTP/HTTPS host and service discovery only.
+- `devixon recon crawl` — Scope-governed internal link crawler.
+- `devixon recon paths` — Directory and file path discovery.
+- `devixon recon urls` — Historical URL intelligence from archives.
+- `devixon recon endpoints` — Endpoint, API, and parameter extraction.
+- `devixon recon full` — Complete 18-stage assessment pipeline.
+- `devixon paths list` — List discovered directories and files with status codes and lengths.
+- `devixon assets list` — Real subdomain, IP, and live service inventory.
+- `devixon assets inspect` — Deep inspection of host intelligence, open ports, and technologies.
+- `devixon endpoints list` — Complete endpoint and query parameter inventory.
 
-### 4. Verification & Testing
-- **14/14 Pytest Unit & Boundary Tests Passing**.
-- **9/9 CLI Self-Tests Passing** via `devixon self-test`.
-- **Operational CLI Verification**: `devixon doctor`, `devixon setup`, `devixon scope`, `devixon recon`, `devixon assets`, `devixon findings`, and `devixon report` fully operational.
+### 4. 15-Section Comprehensive Reporting
+Generated HTML (dark theme) and Markdown reports now comprehensively present all 15 intelligence sections:
+1. Executive Summary
+2. Scope Information
+3. Subdomain Inventory
+4. DNS Intelligence
+5. Live Hosts
+6. Technology Fingerprinting
+7. Discovered Directories and Files
+8. Internal Links Crawled
+9. URL Inventory (Historical vs Live)
+10. Endpoint Inventory
+11. Parameter Inventory
+12. JavaScript Intelligence
+13. API Discoveries
+14. Security Posture Findings
+15. Scan Coverage and Errors
+
+### 5. Test Suite Verification
+- **21 / 21 Tests Passing** in `pytest -v` (including real end-to-end HTTP server crawl and discovery test).
+- **9 / 9 Tests Passing** in `devixon self-test`.

@@ -14,6 +14,7 @@ from devixon.cli.commands import scope as scope_cmd
 from devixon.cli.commands import recon as recon_cmd
 from devixon.cli.commands import findings as findings_cmd
 from devixon.cli.commands import assets as assets_cmd
+from devixon.cli.commands import paths as paths_cmd
 from devixon.cli.commands import report as report_cmd
 from devixon.cli.commands import ai as ai_cmd
 from devixon.cli.commands import tools as tools_cmd
@@ -54,6 +55,12 @@ app.add_typer(scope_app, name="scope")
 
 # Recon subcommands
 recon_app = typer.Typer(help="Execute reconnaissance pipelines.")
+recon_app.command(name="subdomains")(recon_cmd.subdomains)
+recon_app.command(name="hosts")(recon_cmd.hosts)
+recon_app.command(name="crawl")(recon_cmd.crawl)
+recon_app.command(name="paths")(recon_cmd.paths)
+recon_app.command(name="urls")(recon_cmd.urls)
+recon_app.command(name="endpoints")(recon_cmd.endpoints)
 recon_app.command(name="passive")(recon_cmd.passive)
 recon_app.command(name="quick")(recon_cmd.quick)
 recon_app.command(name="full")(recon_cmd.full)
@@ -84,6 +91,11 @@ endpoints_app.command(name="list")(assets_cmd.list_endpoints)
 endpoints_app.command(name="inspect")(assets_cmd.inspect_endpoint)
 endpoints_app.command(name="export")(assets_cmd.export_endpoints)
 app.add_typer(endpoints_app, name="endpoints")
+
+# Paths subcommands
+paths_app = typer.Typer(help="Manage discovered files and directories.")
+paths_app.command(name="list")(paths_cmd.list_paths)
+app.add_typer(paths_app, name="paths")
 
 # Report subcommands
 report_app = typer.Typer(help="Generate and export assessment reports.")

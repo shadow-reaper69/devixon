@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DEVIXON Security Assessment - {{ assessment.target }}</title>
+    <title>DEVIXON Comprehensive Reconnaissance Report - {{ assessment.target }}</title>
     <style>
         :root {
-            --bg-primary: #121417;
-            --bg-secondary: #1a1e23;
-            --bg-card: #22272e;
+            --bg-primary: #0e1117;
+            --bg-secondary: #161b22;
+            --bg-card: #21262d;
             --text-primary: #e6edf3;
             --text-secondary: #8b949e;
-            --accent-teal: #2ea043;
+            --accent-teal: #238636;
             --accent-cyan: #38bdf8;
             --severity-critical: #f85149;
             --severity-high: #fa7a18;
@@ -29,7 +29,7 @@
             padding: 0;
         }
         .container {
-            max-width: 1200px;
+            max-width: 1300px;
             margin: 0 auto;
             padding: 2rem 1.5rem;
         }
@@ -41,19 +41,20 @@
             justify-content: space-between;
             align-items: center;
         }
-        h1, h2, h3 { color: #fff; margin-top: 0; }
-        .brand { font-size: 1.8rem; font-weight: 700; letter-spacing: 1px; color: var(--accent-cyan); }
+        h1, h2, h3, h4 { color: #fff; margin-top: 0; }
+        .brand { font-size: 2rem; font-weight: 800; letter-spacing: 1.5px; color: var(--accent-cyan); }
         .meta-pill {
             background: var(--bg-card);
             border: 1px solid var(--border-color);
-            padding: 0.25rem 0.75rem;
+            padding: 0.3rem 0.8rem;
             border-radius: 999px;
             font-size: 0.85rem;
             color: var(--text-secondary);
+            margin-left: 0.5rem;
         }
         .grid-stats {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 1rem;
             margin-bottom: 2rem;
         }
@@ -65,13 +66,13 @@
             text-align: center;
         }
         .stat-val { font-size: 2rem; font-weight: 700; margin-bottom: 0.25rem; }
-        .stat-label { font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; }
+        .stat-label { font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 600; }
         .card {
             background: var(--bg-secondary);
             border: 1px solid var(--border-color);
             border-radius: 8px;
             padding: 1.5rem;
-            margin-bottom: 1.5rem;
+            margin-bottom: 2rem;
         }
         .badge {
             display: inline-block;
@@ -86,12 +87,17 @@
         .badge-medium { background: var(--severity-medium); color: #000; }
         .badge-low { background: var(--severity-low); color: #000; }
         .badge-info { background: var(--severity-info); color: #fff; }
+        .badge-resolved { background: #238636; color: #fff; }
+        .badge-unresolved { background: #8b949e; color: #fff; }
+        .badge-na { background: #6e7681; color: #fff; }
+        .badge-live { background: #2ea043; color: #fff; }
+        .badge-hist { background: #8b949e; color: #fff; }
         .finding-item {
             background: var(--bg-card);
             border: 1px solid var(--border-color);
             border-radius: 6px;
             padding: 1.25rem;
-            margin-bottom: 1rem;
+            margin-bottom: 1.25rem;
         }
         .finding-header {
             display: flex;
@@ -101,7 +107,7 @@
         }
         code, pre {
             font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-            background: #161b22;
+            background: #0d1117;
             padding: 0.2rem 0.4rem;
             border-radius: 4px;
             font-size: 0.9em;
@@ -121,7 +127,9 @@
             padding: 0.75rem;
             border-bottom: 1px solid var(--border-color);
         }
-        th { color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; }
+        th { color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; }
+        tr:hover { background: rgba(255, 255, 255, 0.02); }
+        .empty-msg { color: var(--text-secondary); font-style: italic; padding: 1rem 0; }
     </style>
 </head>
 <body>
@@ -129,19 +137,32 @@
         <header>
             <div>
                 <div class="brand">DEVIXON</div>
-                <div style="color: var(--text-secondary);">Security Assessment & Reconnaissance Report</div>
+                <div style="color: var(--text-secondary);">AI-Assisted Reconnaissance & Security Intelligence</div>
             </div>
             <div>
-                <span class="meta-pill">Target: {{ assessment.target }}</span>
-                <span class="meta-pill">Profile: {{ assessment.scan_profile }}</span>
-                <span class="meta-pill">Status: {{ assessment.status }}</span>
+                <span class="meta-pill">Target: <strong>{{ assessment.target }}</strong></span>
+                <span class="meta-pill">Profile: <strong>{{ assessment.scan_profile }}</strong></span>
+                <span class="meta-pill">Status: <strong>{{ assessment.status }}</strong></span>
             </div>
         </header>
 
+        <!-- Top Metrics Grid -->
         <div class="grid-stats">
             <div class="stat-card">
-                <div class="stat-val" style="color: var(--accent-cyan);">{{ assets|length }}</div>
-                <div class="stat-label">Discovered Assets</div>
+                <div class="stat-val" style="color: var(--accent-cyan);">{{ subdomains|length }}</div>
+                <div class="stat-label">Subdomains</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-val" style="color: var(--accent-teal);">{{ live_hosts|length }}</div>
+                <div class="stat-label">Live Hosts</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-val" style="color: #a371f7;">{{ discovered_paths|length }}</div>
+                <div class="stat-label">Discovered Paths</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-val" style="color: #58a6ff;">{{ endpoints|length }}</div>
+                <div class="stat-label">Endpoints & URLs</div>
             </div>
             <div class="stat-card">
                 <div class="stat-val" style="color: var(--severity-critical);">{{ critical_count }}</div>
@@ -151,20 +172,274 @@
                 <div class="stat-val" style="color: var(--severity-high);">{{ high_count }}</div>
                 <div class="stat-label">High Findings</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-val" style="color: var(--severity-medium);">{{ medium_count }}</div>
-                <div class="stat-label">Medium / Low</div>
-            </div>
         </div>
 
+        <!-- 1. Executive Summary -->
         <div class="card">
-            <h2>Executive Summary</h2>
-            <p>Assessment executed against <strong>{{ assessment.target }}</strong> using DEVIXON. All operations conformed to authorized scope profile boundaries.</p>
-            <p>Assessment Timeline: Started {{ assessment.start_time.strftime('%Y-%m-%d %H:%M:%S UTC') if assessment.start_time else 'N/A' }} | Completed {{ assessment.end_time.strftime('%Y-%m-%d %H:%M:%S UTC') if assessment.end_time else 'N/A' }}</p>
+            <h2>1. Executive Summary</h2>
+            <p>Assessment executed against target <strong>{{ assessment.target }}</strong> using the DEVIXON reconnaissance framework. All discovery, probing, and security posture checks conformed strictly to authorized scope rules.</p>
+            <p style="color: var(--text-secondary);">
+                Start Time: {{ assessment.start_time.strftime('%Y-%m-%d %H:%M:%S UTC') if assessment.start_time else 'N/A' }} |
+                End Time: {{ assessment.end_time.strftime('%Y-%m-%d %H:%M:%S UTC') if assessment.end_time else 'N/A' }}
+            </p>
         </div>
 
+        <!-- 2. Scope Information -->
         <div class="card">
-            <h2>Security Findings ({{ findings|length }})</h2>
+            <h2>2. Scope Information</h2>
+            <table>
+                <tr><th style="width: 250px;">Primary Domain / Host</th><td><strong>{{ scope_info.get('primary_domain', assessment.target) }}</strong></td></tr>
+                <tr><th>User Authorization Confirmed</th><td><span class="badge badge-resolved">{{ scope_info.get('authorized_by_user', False) }}</span></td></tr>
+                <tr><th>Allowed Subdomains & Wildcards</th><td>{{ scope_info.get('allowed_domains', []) | join(', ') or 'None specified' }}</td></tr>
+                <tr><th>Allowed IP / CIDR Ranges</th><td>{{ scope_info.get('allowed_ips', []) | join(', ') or 'None specified' }}</td></tr>
+                <tr><th>Explicit Excluded Targets</th><td>{{ scope_info.get('excluded_targets', []) | join(', ') or 'None' }}</td></tr>
+                <tr><th>Explicit Excluded Paths</th><td>{{ scope_info.get('excluded_paths', []) | join(', ') or 'None' }}</td></tr>
+            </table>
+        </div>
+
+        <!-- 3. Subdomain Inventory -->
+        <div class="card">
+            <h2>3. Subdomain Inventory ({{ subdomains|length }})</h2>
+            {% if subdomains %}
+            <table>
+                <thead>
+                    <tr><th>Subdomain</th><th>Resolved IP</th><th>Resolution Status</th><th>Discovery Source</th></tr>
+                </thead>
+                <tbody>
+                    {% for s in subdomains %}
+                    <tr>
+                        <td><strong>{{ s.subdomain }}</strong></td>
+                        <td>{{ s.resolved_ip or 'Unresolved' }}</td>
+                        <td>
+                            {% if s.resolution_status == 'RESOLVED' %}<span class="badge badge-resolved">RESOLVED</span>
+                            {% elif s.resolution_status == 'NOT_APPLICABLE' %}<span class="badge badge-na">N/A (IP/Localhost)</span>
+                            {% else %}<span class="badge badge-unresolved">UNRESOLVED</span>{% endif %}
+                        </td>
+                        <td>{{ s.discovery_source }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="empty-msg">No subdomains discovered.</p>
+            {% endif %}
+        </div>
+
+        <!-- 4. DNS Intelligence -->
+        <div class="card">
+            <h2>4. DNS Intelligence ({{ dns_records|length }} records)</h2>
+            {% if dns_records %}
+            <table>
+                <thead>
+                    <tr><th>Host</th><th>Record Type</th><th>Value</th></tr>
+                </thead>
+                <tbody>
+                    {% for d in dns_records[:50] %}
+                    <tr><td>{{ d.host }}</td><td><span class="badge badge-info">{{ d.record_type }}</span></td><td><code>{{ d.value }}</code></td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="empty-msg">No DNS records resolved.</p>
+            {% endif %}
+        </div>
+
+        <!-- 5. Live Hosts -->
+        <div class="card">
+            <h2>5. Live Hosts ({{ live_hosts|length }})</h2>
+            {% if live_hosts %}
+            <table>
+                <thead>
+                    <tr><th>URL</th><th>Status Code</th><th>Web Server</th><th>Page Title</th><th>Response Time</th><th>Redirect Destination</th></tr>
+                </thead>
+                <tbody>
+                    {% for lh in live_hosts %}
+                    <tr>
+                        <td><a href="{{ lh.url }}" target="_blank" style="color: var(--accent-cyan); text-decoration: none;">{{ lh.url }}</a></td>
+                        <td><span class="badge badge-live">HTTP {{ lh.status_code }}</span></td>
+                        <td>{{ lh.web_server or '-' }}</td>
+                        <td>{{ lh.title or '-' }}</td>
+                        <td>{{ lh.response_time_ms or '-' }} ms</td>
+                        <td>{{ lh.redirect_destination or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="empty-msg">No active HTTP/HTTPS live hosts identified.</p>
+            {% endif %}
+        </div>
+
+        <!-- 6. Technology Fingerprinting -->
+        <div class="card">
+            <h2>6. Technology Fingerprinting ({{ technologies|length }})</h2>
+            {% if technologies %}
+            <table>
+                <thead><tr><th>Host</th><th>Category</th><th>Technology Name</th><th>Detection Source</th></tr></thead>
+                <tbody>
+                    {% for t in technologies %}
+                    <tr><td>{{ t.host }}</td><td>{{ t.category }}</td><td><strong>{{ t.name }}</strong></td><td>{{ t.detection_source }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="empty-msg">No technology indicators matched.</p>
+            {% endif %}
+        </div>
+
+        <!-- 7. Discovered Directories and Files -->
+        <div class="card">
+            <h2>7. Discovered Directories and Files ({{ discovered_paths|length }})</h2>
+            {% if discovered_paths %}
+            <table>
+                <thead><tr><th>Path</th><th>Status</th><th>Content Length</th><th>Redirect Location</th><th>Tool</th></tr></thead>
+                <tbody>
+                    {% for dp in discovered_paths %}
+                    <tr>
+                        <td><code>{{ dp.path }}</code></td>
+                        <td><span class="badge badge-live">HTTP {{ dp.status_code }}</span></td>
+                        <td>{{ dp.content_length }} B</td>
+                        <td>{{ dp.redirect_location or '-' }}</td>
+                        <td>{{ dp.discovery_tool }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="empty-msg">No directories or files matched wordlist probes.</p>
+            {% endif %}
+        </div>
+
+        <!-- 8. Internal Links Crawled -->
+        <div class="card">
+            <h2>8. Internal Links Crawled ({{ internal_links|length }})</h2>
+            {% if internal_links %}
+            <table>
+                <thead><tr><th>Source URL</th><th>Destination URL</th><th>Method</th><th>Link Type</th><th>Internal?</th><th>Depth</th></tr></thead>
+                <tbody>
+                    {% for lk in internal_links[:40] %}
+                    <tr>
+                        <td><span style="font-size: 0.85em;">{{ lk.source_url }}</span></td>
+                        <td><span style="font-size: 0.85em; color: var(--accent-cyan);">{{ lk.destination_url }}</span></td>
+                        <td><code>{{ lk.method }}</code></td>
+                        <td>{{ lk.link_type }}</td>
+                        <td>{{ 'Yes' if lk.is_internal else 'External' }}</td>
+                        <td>{{ lk.crawl_depth }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="empty-msg">No links extracted from crawler.</p>
+            {% endif %}
+        </div>
+
+        <!-- 9. URL Inventory -->
+        <div class="card">
+            <h2>9. URL Inventory ({{ endpoints|length }})</h2>
+            {% if endpoints %}
+            <table>
+                <thead><tr><th>URL</th><th>Discovery Source</th><th>Origin Classification</th></tr></thead>
+                <tbody>
+                    {% for ep in endpoints[:50] %}
+                    <tr>
+                        <td><code style="word-break: break-all;">{{ ep.url }}</code></td>
+                        <td>{{ ep.discovery_source }}</td>
+                        <td>
+                            {% if ep.is_historical %}<span class="badge badge-hist">Historical (Archive)</span>
+                            {% else %}<span class="badge badge-live">Live Endpoint</span>{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="empty-msg">No URLs recorded.</p>
+            {% endif %}
+        </div>
+
+        <!-- 10. Endpoint Inventory -->
+        <div class="card">
+            <h2>10. Endpoint Inventory</h2>
+            {% if endpoints %}
+            <table>
+                <thead><tr><th>Method</th><th>Path</th><th>Query Parameters</th><th>Classification</th></tr></thead>
+                <tbody>
+                    {% for ep in endpoints[:50] %}
+                    <tr>
+                        <td><strong>{{ ep.method }}</strong></td>
+                        <td><code>{{ ep.path }}</code></td>
+                        <td>{{ ep.params or '-' }}</td>
+                        <td>{{ 'Historical' if ep.is_historical else 'Current' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="empty-msg">No endpoints recorded.</p>
+            {% endif %}
+        </div>
+
+        <!-- 11. Parameter Inventory -->
+        <div class="card">
+            <h2>11. Parameter Inventory ({{ parameters|length }})</h2>
+            {% if parameters %}
+            <table>
+                <thead><tr><th>Parameter Name</th><th>Type</th><th>Example Value</th></tr></thead>
+                <tbody>
+                    {% for p in parameters[:50] %}
+                    <tr><td><strong>{{ p.name }}</strong></td><td>{{ p.param_type }}</td><td><code>{{ p.example_value or '-' }}</code></td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="empty-msg">No query or body parameters discovered.</p>
+            {% endif %}
+        </div>
+
+        <!-- 12. JavaScript Intelligence -->
+        <div class="card">
+            <h2>12. JavaScript Intelligence ({{ js_assets|length }})</h2>
+            {% if js_assets %}
+            <table>
+                <thead><tr><th>JavaScript URL</th><th>Source Map</th><th>Discovered Routes</th><th>Sanitized Secrets</th></tr></thead>
+                <tbody>
+                    {% for js in js_assets %}
+                    <tr>
+                        <td><code>{{ js.url }}</code></td>
+                        <td>{{ js.source_map_url or 'None' }}</td>
+                        <td>{{ js.routes_found_json or 'None' }}</td>
+                        <td>{{ js.secrets_found_json or 'None' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="empty-msg">No scoped JavaScript assets analyzed.</p>
+            {% endif %}
+        </div>
+
+        <!-- 13. API Discoveries -->
+        <div class="card">
+            <h2>13. API Discoveries</h2>
+            {% set api_items = discovered_paths | selectattr("discovery_tool", "equalto", "API_DISCOVERY") | list %}
+            {% if api_items %}
+            <table>
+                <thead><tr><th>API Documentation / Interface URL</th><th>HTTP Status</th></tr></thead>
+                <tbody>
+                    {% for a in api_items %}
+                    <tr><td><code>{{ a.url }}</code></td><td><span class="badge badge-live">HTTP {{ a.status_code }}</span></td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="empty-msg">No public Swagger, OpenAPI, or GraphQL schemas detected.</p>
+            {% endif %}
+        </div>
+
+        <!-- 14. Security Findings -->
+        <div class="card">
+            <h2>14. Security Posture Findings ({{ findings|length }})</h2>
             {% if findings %}
                 {% for finding in findings %}
                 <div class="finding-item">
@@ -175,7 +450,7 @@
                             <span class="meta-pill">{{ finding.verification_status }}</span>
                         </div>
                     </div>
-                    <p><strong>Category:</strong> {{ finding.category }} | <strong>CVSS:</strong> {{ finding.cvss_score or 'N/A' }}</p>
+                    <p><strong>Category:</strong> {{ finding.category }} | <strong>CVSS Base:</strong> {{ finding.cvss_score or 'N/A' }} ({{ finding.cvss_vector or 'N/A' }})</p>
                     <p>{{ finding.description }}</p>
                     <h4>Impact</h4>
                     <p>{{ finding.impact }}</p>
@@ -190,34 +465,36 @@
                 </div>
                 {% endfor %}
             {% else %}
-                <p style="color: var(--text-secondary);">No security vulnerabilities identified.</p>
+                <p class="empty-msg">No security vulnerabilities or misconfigurations identified.</p>
             {% endif %}
         </div>
 
+        <!-- 15. Scan Coverage and Errors -->
         <div class="card">
-            <h2>Discovered Asset Inventory ({{ assets|length }})</h2>
+            <h2>15. Scan Coverage & Stage Execution ({{ stages|length }})</h2>
+            {% if stages %}
             <table>
-                <thead>
-                    <tr>
-                        <th>Hostname</th>
-                        <th>IP Address</th>
-                        <th>Type</th>
-                        <th>Scope Status</th>
-                        <th>Discovery Source</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>Stage ID</th><th>Stage Name</th><th>Execution Status</th><th>Duration</th><th>Error / Notes</th></tr></thead>
                 <tbody>
-                    {% for asset in assets %}
+                    {% for st in stages %}
                     <tr>
-                        <td><strong>{{ asset.hostname }}</strong></td>
-                        <td>{{ asset.ip_address or 'Unresolved' }}</td>
-                        <td>{{ asset.asset_type }}</td>
-                        <td>{{ asset.scope_status }}</td>
-                        <td>{{ asset.discovery_source }}</td>
+                        <td><code>{{ st.stage_id }}</code></td>
+                        <td><strong>{{ st.name }}</strong></td>
+                        <td>
+                            {% if st.status == 'COMPLETED' %}<span class="badge badge-resolved">COMPLETED</span>
+                            {% elif st.status == 'SKIPPED' %}<span class="badge badge-na">SKIPPED</span>
+                            {% elif st.status == 'FAILED' %}<span class="badge badge-critical">FAILED</span>
+                            {% else %}<span class="badge badge-info">{{ st.status }}</span>{% endif %}
+                        </td>
+                        <td>{{ "%.2f"|format(st.duration) if st.duration else '-' }} s</td>
+                        <td><span style="font-size: 0.85em; color: var(--text-secondary);">{{ st.error_message or '-' }}</span></td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
+            {% else %}
+            <p class="empty-msg">No scan stage telemetry recorded.</p>
+            {% endif %}
         </div>
     </div>
 </body>
